@@ -679,17 +679,32 @@ ipcMain.handle('import:json', async () => {
     try {
         const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
         if (data.settings)  data.settings.forEach(r  => db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', [r.key, r.value]));
-        if (data.logs)      data.logs.forEach(r       => db.run('INSERT OR REPLACE INTO logs (id,ts,title,system,body,content,tags) VALUES (?,?,?,?,?,?,?)', [r.id,r.ts,r.title,r.system,r.body,r.content,r.tags]));
+        if (data.logs)      data.logs.forEach(r => {
+            // Normalise missing/null fields so NOT-NULL columns never receive undefined
+            const content = r.content ?? r.body ?? '';
+            const body    = r.body    ?? '';
+            const system  = r.system  || '';
+            const tags    = typeof r.tags === 'string' ? r.tags : JSON.stringify(r.tags || []);
+            db.run(
+                'INSERT OR REPLACE INTO logs (id,ts,title,system,body,content,tags) VALUES (?,?,?,?,?,?,?)',
+                [r.id, r.ts, r.title, system, body, content, tags]
+            );
+        });
         if (data.bookmarks) data.bookmarks.forEach(r  => {
             // Accept both legacy x/y and new lat/lon field names
-            const lat = r.lat ?? r.x ?? null;
-            const lon = r.lon ?? r.y ?? null;
-            db.run('INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)', [r.id,r.ts,r.system,r.type,lat,lon,r.z,r.notes,r.tags]);
+            const lat  = r.lat ?? r.x ?? null;
+            const lon  = r.lon ?? r.y ?? null;
+            const tags = typeof r.tags === 'string' ? r.tags : JSON.stringify(r.tags || []);
+            db.run(
+                'INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)',
+                [r.id, r.ts, r.system, r.type || 'POI', lat, lon, r.z ?? null, r.notes || '', tags]
+            );
         });
         if (data.visited)   data.visited.forEach(r    => db.run('INSERT OR IGNORE INTO visited (name,ts) VALUES (?,?)', [r.name, r.ts]));
         flushDB();
         return { ok: true };
     } catch (e) {
+        console.error('Import error:', e);
         return { ok: false, error: e.message };
     }
 });

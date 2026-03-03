@@ -1033,7 +1033,7 @@ function renderLogs() {
         const textMatch = !q || (
             l.title.toLowerCase().includes(q) ||
             (l.system||'').toLowerCase().includes(q) ||
-            l.content.toLowerCase().includes(q)
+            (l.content||'').toLowerCase().includes(q)
         );
         const tagMatch  = !tag || (l.tags||[]).some(t=>t.toLowerCase().includes(tag));
         return textMatch && tagMatch;
@@ -1053,7 +1053,7 @@ function renderLogs() {
                 ${e.system?`<div class="log-entry-sys">◇ ${e.system}${e.body?' / '+e.body:''}</div>`:''}
             </div>
             <div class="log-entry-date">◈ ${edDate(e.ts)}</div>
-            <div class="log-entry-body">${e.content.replace(/\n/g,'<br>')}</div>
+            <div class="log-entry-body">${(e.content||'').replace(/\n/g,'<br>')}</div>
             ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag tag-clickable" onclick="filterLogsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts">
                 <button class="btn btn-sm" onclick="openLogViewModal('${e.id}')">View</button>
@@ -1465,6 +1465,7 @@ window.api.onSyncDataUpdated(async () => {
     gBm      = await window.api.getBookmarks();
     gVisited = await window.api.getVisited();
     updateDash(); updateBadges();
+    renderLogs(); renderBookmarks(); renderVisited();
     document.getElementById('sync-last-ts').textContent = new Date().toLocaleTimeString();
     document.getElementById('sync-last-row').style.display = 'block';
     toast('↔ Sync data received from Android');
@@ -1493,6 +1494,7 @@ async function importData() {
         gBm      = await window.api.getBookmarks();
         gVisited = await window.api.getVisited();
         updateDash(); updateBadges(); loadSettings();
+        renderLogs(); renderBookmarks(); renderVisited();
         toast('⬆ Data imported successfully');
     } else if (res.error) {
         toast('⚠ Import failed: ' + res.error);
@@ -1520,7 +1522,7 @@ function openLogViewModal(id) {
     if (e.body) meta += `  ·  ${e.body}`;
     document.getElementById('lv-meta').textContent = meta;
 
-    document.getElementById('lv-content').textContent = e.content;
+    document.getElementById('lv-content').textContent = e.content || '';
 
     const tagsRow = document.getElementById('lv-tags-row');
     tagsRow.innerHTML = e.tags?.length
