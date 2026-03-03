@@ -1,0 +1,42 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.cmdrsys.app"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.cmdrsys.app"
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName "2.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "com.capacitorjs:core:6.0.0"
+    implementation "com.capacitorjs:preferences:6.0.0"
+    implementation "com.capacitorjs:status-bar:6.0.0"
+    implementation "com.capacitorjs:keyboard:6.0.0"
+    implementation "com.capacitorjs:haptics:6.0.0"
+    implementation "com.capacitorjs:app:6.0.0"
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+}

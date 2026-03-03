@@ -1,0 +1,16 @@
+{
+	"appId": "com.cmdrsys.app",
+	"appName": "CMDRSYS",
+	"webDir": "dist",
+	"android": {},
+	"plugins": {
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#020609"
+		},
+		"Keyboard": {
+			"resize": "body",
+			"resizeOnFullScreen": true
+		}
+	}
+}
