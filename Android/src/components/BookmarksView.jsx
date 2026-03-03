@@ -18,22 +18,29 @@ const TYPE_COLOR = {
   CARRIER: '#CC88FF', OTHER: '#4A6A8A',
 };
 
-const EMPTY_FORM = { system: '', type: 'POI', x: '', y: '', z: '', notes: '', tags: '' };
+const EMPTY_FORM = { system: '', type: 'POI', lat: '', lon: '', z: '', notes: '', tags: '' };
 
 export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmark, currentSystem }) {
-  const [query,   setQuery]   = useState('');
-  const [modal,   setModal]   = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form,    setForm]    = useState(EMPTY_FORM);
+  const [query,    setQuery]    = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [modal,    setModal]    = useState(false);
+  const [editing,  setEditing]  = useState(null);
+  const [form,     setForm]     = useState(EMPTY_FORM);
 
+  // Separate text search from tag filter
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    return bookmarks.filter(b =>
-      b.system.toLowerCase().includes(q) ||
-      (b.notes || '').toLowerCase().includes(q) ||
-      (b.tags || []).some(t => t.toLowerCase().includes(q))
-    );
-  }, [bookmarks, query]);
+    const q   = query.toLowerCase();
+    const tag = tagFilter.toLowerCase().trim();
+    return bookmarks.filter(b => {
+      const textMatch = !q || (
+        b.system.toLowerCase().includes(q) ||
+        (b.notes || '').toLowerCase().includes(q) ||
+        (b.tags || []).some(t => t.toLowerCase().includes(q))
+      );
+      const tagMatch = !tag || (b.tags || []).some(t => t.toLowerCase().includes(tag));
+      return textMatch && tagMatch;
+    });
+  }, [bookmarks, query, tagFilter]);
 
   function openNew(prefillSys) {
     setEditing(null);
@@ -46,8 +53,9 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
     setForm({
       system: bm.system,
       type:   bm.type,
-      x:      bm.x ?? '',
-      y:      bm.y ?? '',
+      // Support both lat/lon (v2) and legacy x/y
+      lat:    bm.lat ?? bm.x ?? '',
+      lon:    bm.lon ?? bm.y ?? '',
       z:      bm.z ?? '',
       notes:  bm.notes || '',
       tags:   (bm.tags || []).join(', '),
@@ -59,6 +67,13 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
     return e => setForm(f => ({ ...f, [field]: e.target.value }));
   }
 
+  // Parse a coordinate string that may be empty or a valid negative/positive number
+  function parseCoord(val) {
+    if (val === '' || val === null || val === undefined) return null;
+    const n = parseFloat(val);
+    return isNaN(n) ? null : n;
+  }
+
   async function handleSave() {
     if (!form.system.trim()) return;
     await upsertBookmark({
@@ -66,9 +81,9 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
       ts:     Date.now(),
       system: form.system.trim(),
       type:   form.type,
-      x:      parseFloat(form.x) || null,
-      y:      parseFloat(form.y) || null,
-      z:      parseFloat(form.z) || null,
+      lat:    parseCoord(form.lat),
+      lon:    parseCoord(form.lon),
+      z:      parseCoord(form.z),
       notes:  form.notes.trim(),
       tags:   form.tags.split(',').map(t => t.trim()).filter(Boolean),
     });
@@ -78,6 +93,11 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
   async function handleDelete(id) {
     if (!window.confirm('Delete this bookmark?')) return;
     await deleteBookmark(id);
+  }
+
+  // Clicking a tag chip sets the tag filter
+  function filterByTag(tag) {
+    setTagFilter(tag);
   }
 
   return (
@@ -91,46 +111,80 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
         <Btn onClick={() => openNew()} variant="cyan" small>+ Bookmark</Btn>
       </div>
 
+      {/* Text search */}
       <SearchBar value={query} onChange={e => setQuery(e.target.value)} placeholder="SEARCH SYSTEMS..." />
+
+      {/* Tag filter */}
+      <div style={{ marginBottom: '14px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <input
+            type="search"
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+            placeholder="FILTER BY TAG..."
+            style={{
+              width: '100%', background: 'rgba(0,0,0,0.4)',
+              border: '1px solid var(--border-c)', color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)', fontSize: '13px',
+              padding: '10px 14px', outline: 'none',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--ed-cyan)'}
+            onBlur={e  => e.target.style.borderColor = 'var(--border-c)'}
+          />
+        </div>
+        {tagFilter && (
+          <Btn onClick={() => setTagFilter('')} variant="red" small>✕</Btn>
+        )}
+      </div>
 
       {filtered.length === 0
         ? <Empty icon="◎" text={bookmarks.length === 0 ? 'No bookmarks yet.' : 'No bookmarks match.'} />
         : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
-            {filtered.map(bm => (
-              <div key={bm.id} style={{
-                border: '1px solid var(--border-c)',
-                padding: '13px',
-                background: 'rgba(5,14,24,0.8)',
-                clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
-              }}>
-                <div style={{ fontFamily: 'var(--font-hud)', fontSize: '13px', color: 'var(--ed-cyan)', marginBottom: '3px', textShadow: '0 0 8px rgba(0,212,255,0.35)', wordBreak: 'break-word' }}>
-                  {bm.system}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: TYPE_COLOR[bm.type] || '#4A6A8A', marginBottom: '7px' }}>
-                  {bm.type}
-                </div>
-                {bm.notes && (
-                  <div style={{ fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: '5px', userSelect: 'text', WebkitUserSelect: 'text' }}>
-                    {bm.notes}
+            {filtered.map(bm => {
+              const hasCoords = bm.lat != null && bm.lon != null;
+              return (
+                <div key={bm.id} style={{
+                  border: '1px solid var(--border-c)',
+                  padding: '13px',
+                  background: 'rgba(5,14,24,0.8)',
+                  clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
+                }}>
+                  <div style={{ fontFamily: 'var(--font-hud)', fontSize: '13px', color: 'var(--ed-cyan)', marginBottom: '3px', textShadow: '0 0 8px rgba(0,212,255,0.35)', wordBreak: 'break-word' }}>
+                    {bm.system}
                   </div>
-                )}
-                {bm.x != null && bm.y != null && (
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '5px' }}>
-                    X:{bm.x} Y:{bm.y}{bm.z != null ? ` Z:${bm.z}` : ''}
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', color: TYPE_COLOR[bm.type] || '#4A6A8A', marginBottom: '7px' }}>
+                    {bm.type}
                   </div>
-                )}
-                {bm.tags?.length > 0 && (
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                    {bm.tags.map(t => <Tag key={t} label={t} />)}
+                  {bm.notes && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: '5px', userSelect: 'text', WebkitUserSelect: 'text' }}>
+                      {bm.notes}
+                    </div>
+                  )}
+                  {hasCoords && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '5px' }}>
+                      Lat:{bm.lat} Lon:{bm.lon}{bm.z != null ? ` Alt:${bm.z}` : ''}
+                    </div>
+                  )}
+                  {bm.tags?.length > 0 && (
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      {bm.tags.map(t => (
+                        <Tag
+                          key={t}
+                          label={t}
+                          onClick={() => filterByTag(t)}
+                          active={tagFilter === t}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                    <Btn onClick={() => openEdit(bm)} variant="cyan" small>Edit</Btn>
+                    <Btn onClick={() => handleDelete(bm.id)} variant="red" small>Del</Btn>
                   </div>
-                )}
-                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                  <Btn onClick={() => openEdit(bm)} variant="cyan" small>Edit</Btn>
-                  <Btn onClick={() => handleDelete(bm.id)} variant="red" small>Del</Btn>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )
       }
@@ -142,9 +196,9 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
           <FormSelect label="Type"        value={form.type}   onChange={set('type')}   options={TYPE_OPTIONS} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-          <FormInput label="Coord X" value={form.x} onChange={set('x')} placeholder="0.00" type="number" />
-          <FormInput label="Coord Y" value={form.y} onChange={set('y')} placeholder="0.00" type="number" />
-          <FormInput label="Coord Z" value={form.z} onChange={set('z')} placeholder="0.00" type="number" />
+          <FormInput label="Latitude"        value={form.lat} onChange={set('lat')} placeholder="0.0000" type="number" inputMode="decimal" />
+          <FormInput label="Longitude"       value={form.lon} onChange={set('lon')} placeholder="0.0000" type="number" inputMode="decimal" />
+          <FormInput label="Altitude/Depth"  value={form.z}   onChange={set('z')}   placeholder="0.00"   type="number" inputMode="decimal" />
         </div>
         <FormTextarea label="Notes" value={form.notes} onChange={set('notes')} placeholder="Interesting features, resources..." rows={3} />
         <FormInput    label="Tags (comma separated)" value={form.tags} onChange={set('tags')} placeholder="nebula, earth-like, neutron..." />

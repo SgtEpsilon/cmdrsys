@@ -44,9 +44,12 @@ export default function SettingsView({
     notify('◈ Profile saved');
   }
 
-  function handleExport() {
-    exportData();
-    notify('⬇ Export started');
+  async function handleExport() {
+    try {
+      await exportData();
+    } catch (e) {
+      notify('⚠ ' + e.message);
+    }
   }
 
   async function handleImport(e) {

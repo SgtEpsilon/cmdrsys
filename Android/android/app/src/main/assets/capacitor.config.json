@@ -2,7 +2,12 @@
 	"appId": "com.cmdrsys.app",
 	"appName": "CMDRSYS",
 	"webDir": "dist",
-	"android": {},
+	"server": {
+		"androidScheme": "http"
+	},
+	"android": {
+		"allowMixedContent": true
+	},
 	"plugins": {
 		"StatusBar": {
 			"style": "DARK",

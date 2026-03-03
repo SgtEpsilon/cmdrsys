@@ -1,21 +1,22 @@
 /**
- * storage.js — Persistent storage abstraction.
+ * storage.js — Persistent storage using @capacitor/preferences.
  *
- * In production (Capacitor), swap the localStorage calls for:
- *   import { Preferences } from '@capacitor/preferences';
- *   await Preferences.set({ key, value: JSON.stringify(data) });
- *   const { value } = await Preferences.get({ key });
- *
- * For web/dev we use localStorage directly.
+ * Preferences works correctly in both Capacitor (Android/iOS) and
+ * web/dev mode. localStorage is NOT used — it is sandboxed in
+ * Capacitor's WebView and data written to it is inaccessible across
+ * app restarts on some Android versions, and completely unreachable
+ * by native code.
  */
+
+import { Preferences } from '@capacitor/preferences';
 
 const PREFIX = 'cmdrsys_';
 
 export const storage = {
   async get(key) {
     try {
-      const raw = localStorage.getItem(PREFIX + key);
-      return raw ? JSON.parse(raw) : null;
+      const { value } = await Preferences.get({ key: PREFIX + key });
+      return value ? JSON.parse(value) : null;
     } catch {
       return null;
     }
@@ -23,7 +24,7 @@ export const storage = {
 
   async set(key, value) {
     try {
-      localStorage.setItem(PREFIX + key, JSON.stringify(value));
+      await Preferences.set({ key: PREFIX + key, value: JSON.stringify(value) });
       return true;
     } catch {
       return false;
@@ -32,7 +33,7 @@ export const storage = {
 
   async remove(key) {
     try {
-      localStorage.removeItem(PREFIX + key);
+      await Preferences.remove({ key: PREFIX + key });
       return true;
     } catch {
       return false;

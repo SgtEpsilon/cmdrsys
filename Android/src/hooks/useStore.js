@@ -5,7 +5,20 @@ import {
   getVisited, saveVisited,
   getSettings, saveSettings,
 } from '../utils/storage.js';
-import { getSyncConfig, fullSync } from '../utils/syncService.js';
+import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop } from '../utils/syncService.js';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+
+// Normalise legacy x/y -> lat/lon for bookmarks loaded from local storage
+function normaliseBm(b) {
+  if (!b) return b;
+  const out = { ...b };
+  out.lat = b.lat ?? b.x ?? null;
+  out.lon = b.lon ?? b.y ?? null;
+  delete out.x;
+  delete out.y;
+  return out;
+}
 
 const AUTO_SYNC_INTERVAL = 30_000;
 
@@ -33,7 +46,7 @@ export function useStore() {
       try {
         const [l, b, v, s] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings()]);
         setLogsState(l);
-        setBookmarksState(b);
+        setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
       } catch (e) {
@@ -61,7 +74,7 @@ export function useStore() {
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
-        setBookmarksState(result.bookmarks);
+        setBookmarksState(result.bookmarks.map(normaliseBm));
 
         await saveLogs(result.logs);
         setLogsState(result.logs);
@@ -105,7 +118,7 @@ export function useStore() {
       const result = await fullSync(bookmarksRef.current, logsRef.current);
 
       await saveBookmarks(result.bookmarks);
-      setBookmarksState(result.bookmarks);
+      setBookmarksState(result.bookmarks.map(normaliseBm));
 
       await saveLogs(result.logs);
       setLogsState(result.logs);
@@ -150,6 +163,8 @@ export function useStore() {
       saveLogs(next);
       return next;
     });
+    // Best-effort — propagate deletion to desktop if sync is configured
+    deleteLogOnDesktop(id);
   }, []);
 
   // ── Bookmarks ────────────────────────────────────────────────────────────────
@@ -170,6 +185,8 @@ export function useStore() {
       saveBookmarks(next);
       return next;
     });
+    // Best-effort — propagate deletion to desktop if sync is configured
+    deleteBookmarkOnDesktop(id);
   }, []);
 
   // ── Visited ──────────────────────────────────────────────────────────────────
@@ -188,16 +205,29 @@ export function useStore() {
   }, []);
 
   // ── Import / Export ──────────────────────────────────────────────────────────
-  const exportData = useCallback(() => {
+  const exportData = useCallback(async () => {
     const payload = JSON.stringify({ logs, bookmarks, visited, settings }, null, 2);
-    const blob = new Blob([payload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cmdrsys-backup-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    return true;
+    const fileName = `cmdrsys-backup-${Date.now()}.json`;
+    try {
+      // Write to the app's cache directory (always writable, no permissions needed)
+      const result = await Filesystem.writeFile({
+        path: fileName,
+        data: payload,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+      });
+      // Open the system share sheet so the user can save/send the file
+      await Share.share({
+        title: 'CMDRSYS Backup',
+        text:  'CMDRSYS data export',
+        url:   result.uri,
+        dialogTitle: 'Save or share CMDRSYS backup',
+      });
+      return true;
+    } catch (e) {
+      console.error('Export failed:', e);
+      throw new Error('Export failed: ' + e.message);
+    }
   }, [logs, bookmarks, visited, settings]);
 
   const importData = useCallback(async (jsonText) => {

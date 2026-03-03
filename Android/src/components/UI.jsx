@@ -71,7 +71,7 @@ export function Panel({ title, children, style }) {
 }
 
 // ── FormInput ────────────────────────────────────────────────────
-export function FormInput({ label, value, onChange, placeholder, type = 'text', style }) {
+export function FormInput({ label, value, onChange, placeholder, type = 'text', inputMode, style }) {
   return (
     <div style={{ marginBottom: '12px', ...style }}>
       {label && (
@@ -83,6 +83,7 @@ export function FormInput({ label, value, onChange, placeholder, type = 'text', 
       )}
       <input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
@@ -227,12 +228,22 @@ export function Modal({ open, onClose, title, cyan, children }) {
 }
 
 // ── Tag ──────────────────────────────────────────────────────────
-export function Tag({ label }) {
+export function Tag({ label, onClick, active }) {
+  const isClickable = typeof onClick === 'function';
   return (
-    <span style={{
-      fontFamily: 'var(--font-mono)', fontSize: '10px', padding: '2px 7px',
-      border: '1px solid var(--border-c)', color: 'var(--ed-cyan)', letterSpacing: '1px',
-    }}>{label}</span>
+    <span
+      onClick={onClick}
+      style={{
+        fontFamily: 'var(--font-mono)', fontSize: '10px', padding: '2px 7px',
+        border: `1px solid ${active ? 'var(--ed-cyan)' : 'var(--border-c)'}`,
+        color: 'var(--ed-cyan)', letterSpacing: '1px',
+        background: active ? 'rgba(0,212,255,0.18)' : 'transparent',
+        cursor: isClickable ? 'pointer' : 'default',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'background 0.12s, border-color 0.12s',
+        userSelect: 'none',
+      }}
+    >{label}</span>
   );
 }
 

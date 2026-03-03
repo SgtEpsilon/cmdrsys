@@ -5,21 +5,28 @@ import { edDate } from '../utils/edDate.js';
 const EMPTY_FORM = { title: '', system: '', body: '', content: '', tags: '' };
 
 export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) {
-  const [query,   setQuery]   = useState('');
-  const [modal,   setModal]   = useState(false);
-  const [editing, setEditing] = useState(null); // null = new
-  const [form,    setForm]    = useState(EMPTY_FORM);
+  const [query,     setQuery]     = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [modal,     setModal]     = useState(false);
+  const [editing,   setEditing]   = useState(null);
+  const [form,      setForm]      = useState(EMPTY_FORM);
 
+  // Separate text search from tag filter
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
+    const q   = query.toLowerCase();
+    const tag = tagFilter.toLowerCase().trim();
     return [...logs]
       .sort((a, b) => b.ts - a.ts)
-      .filter(l =>
-        l.title.toLowerCase().includes(q) ||
-        (l.system || '').toLowerCase().includes(q) ||
-        l.content.toLowerCase().includes(q)
-      );
-  }, [logs, query]);
+      .filter(l => {
+        const textMatch = !q || (
+          l.title.toLowerCase().includes(q) ||
+          (l.system || '').toLowerCase().includes(q) ||
+          l.content.toLowerCase().includes(q)
+        );
+        const tagMatch = !tag || (l.tags || []).some(t => t.toLowerCase().includes(tag));
+        return textMatch && tagMatch;
+      });
+  }, [logs, query, tagFilter]);
 
   function openNew() {
     setEditing(null);
@@ -62,6 +69,11 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
     await deleteLog(id);
   }
 
+  // Clicking a tag chip sets the tag filter
+  function filterByTag(tag) {
+    setTagFilter(tag);
+  }
+
   return (
     <div>
       {/* Header */}
@@ -73,7 +85,31 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
         <Btn onClick={openNew} small>+ New Entry</Btn>
       </div>
 
+      {/* Text search */}
       <SearchBar value={query} onChange={e => setQuery(e.target.value)} placeholder="SEARCH LOG ENTRIES..." />
+
+      {/* Tag filter */}
+      <div style={{ marginBottom: '14px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <input
+            type="search"
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+            placeholder="FILTER BY TAG..."
+            style={{
+              width: '100%', background: 'rgba(0,0,0,0.4)',
+              border: '1px solid var(--border-c)', color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)', fontSize: '13px',
+              padding: '10px 14px', outline: 'none',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--ed-cyan)'}
+            onBlur={e  => e.target.style.borderColor = 'var(--border-c)'}
+          />
+        </div>
+        {tagFilter && (
+          <Btn onClick={() => setTagFilter('')} variant="red" small>✕</Btn>
+        )}
+      </div>
 
       {/* List */}
       {filtered.length === 0
@@ -105,7 +141,14 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
             </div>
             {entry.tags?.length > 0 && (
               <div style={{ display: 'flex', gap: '5px', marginTop: '8px', flexWrap: 'wrap' }}>
-                {entry.tags.map(t => <Tag key={t} label={t} />)}
+                {entry.tags.map(t => (
+                  <Tag
+                    key={t}
+                    label={t}
+                    onClick={() => filterByTag(t)}
+                    active={tagFilter === t}
+                  />
+                ))}
               </div>
             )}
             <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>

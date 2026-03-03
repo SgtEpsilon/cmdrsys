@@ -215,6 +215,8 @@
         .log-entry-body { font-family:var(--font-body); font-size:16px; color:var(--text-primary); line-height:1.6; opacity:0.85; user-select:text; }
         .tag-row { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
         .tag { font-family:var(--font-mono); font-size:10px; padding:2px 6px; border:1px solid var(--border-c); color:var(--ed-cyan); letter-spacing:1px; }
+        .tag-clickable { cursor:pointer; transition:background 0.12s, border-color 0.12s; }
+        .tag-clickable:hover { background:rgba(0,212,255,0.18); border-color:var(--ed-cyan); }
         .entry-acts { display:flex; gap:6px; margin-top:10px; }
 
         /* ── BOOKMARKS ───────────────────────────── */
@@ -444,6 +446,7 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="log-search" placeholder="SEARCH LOG ENTRIES..." oninput="debouncedRenderLogs()">
+            <input type="text" class="search-in" id="log-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderLogs()">
         </div>
         <div id="log-list"></div>
     </div>
@@ -459,6 +462,7 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
+            <input type="text" class="search-in" id="bm-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderBookmarks()">
         </div>
         <div id="bm-grid" class="bm-grid"></div>
     </div>
@@ -658,9 +662,9 @@
         </div>
     </div>
     <div class="form-row3">
-        <div class="form-group"><label class="form-lbl">Coord X</label><input type="number" class="form-input" id="bm-x" placeholder="0.00" step="0.01"></div>
-        <div class="form-group"><label class="form-lbl">Coord Y</label><input type="number" class="form-input" id="bm-y" placeholder="0.00" step="0.01"></div>
-        <div class="form-group"><label class="form-lbl">Coord Z</label><input type="number" class="form-input" id="bm-z" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><label class="form-lbl">Latitude</label><input type="number" class="form-input" id="bm-x" placeholder="0.0000" step="any" min="-90" max="90"></div>
+        <div class="form-group"><label class="form-lbl">Longitude</label><input type="number" class="form-input" id="bm-y" placeholder="0.0000" step="any" min="-180" max="180"></div>
+        <div class="form-group"><label class="form-lbl">Altitude / Depth</label><input type="number" class="form-input" id="bm-z" placeholder="0.00" step="any"></div>
     </div>
     <div class="form-group"><label class="form-lbl">Notes</label><textarea class="form-ta" id="bm-notes" rows="4" placeholder="Interesting features, resources..."></textarea></div>
     <div class="form-group"><label class="form-lbl">Tags (comma separated)</label><input type="text" class="form-input" id="bm-tags" placeholder="nebula, earth-like, neutron..."></div>
@@ -956,12 +960,17 @@ async function deleteLog(id) {
 }
 
 function renderLogs() {
-    const q  = (document.getElementById('log-search')?.value||'').toLowerCase();
-    const fl = gLogs.filter(l=>
-        l.title.toLowerCase().includes(q)||
-        (l.system||'').toLowerCase().includes(q)||
-        l.content.toLowerCase().includes(q)
-    );
+    const q   = (document.getElementById('log-search')?.value||'').toLowerCase();
+    const tag = (document.getElementById('log-tag-filter')?.value||'').toLowerCase().trim();
+    const fl  = gLogs.filter(l => {
+        const textMatch = !q || (
+            l.title.toLowerCase().includes(q) ||
+            (l.system||'').toLowerCase().includes(q) ||
+            l.content.toLowerCase().includes(q)
+        );
+        const tagMatch  = !tag || (l.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        return textMatch && tagMatch;
+    });
     const c = document.getElementById('log-list');
     if (fl.length===0) {
         c.innerHTML = `<div class="empty"><div class="empty-icon">◉</div><div class="empty-txt">${gLogs.length===0?'No log entries yet.':'No entries match your search.'}</div></div>`;
@@ -978,7 +987,7 @@ function renderLogs() {
             </div>
             <div class="log-entry-date">◈ ${edDate(e.ts)}</div>
             <div class="log-entry-body">${e.content.replace(/\n/g,'<br>')}</div>
-            ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag tag-clickable" onclick="filterLogsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts">
                 <button class="btn btn-c btn-sm" onclick="openLogModal('${e.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteLog('${e.id}')">Delete</button>
@@ -1000,9 +1009,9 @@ function openBmModal(id, prefillSys) {
         const b = gBm.find(x=>x.id===id);
         document.getElementById('bm-sys').value   = b.system;
         document.getElementById('bm-type').value  = b.type;
-        document.getElementById('bm-x').value     = b.x??'';
-        document.getElementById('bm-y').value     = b.y??'';
-        document.getElementById('bm-z').value     = b.z??'';
+        document.getElementById('bm-x').value     = b.lat ?? b.x ?? '';
+        document.getElementById('bm-y').value     = b.lon ?? b.y ?? '';
+        document.getElementById('bm-z').value     = b.z ?? '';
         document.getElementById('bm-notes').value = b.notes||'';
         document.getElementById('bm-tags').value  = (b.tags||[]).join(', ');
     } else {
@@ -1022,9 +1031,9 @@ async function saveBm() {
     const bm = {
         id:    id||Date.now().toString(), ts:Date.now(), system,
         type:  document.getElementById('bm-type').value,
-        x:     parseFloat(document.getElementById('bm-x').value)||null,
-        y:     parseFloat(document.getElementById('bm-y').value)||null,
-        z:     parseFloat(document.getElementById('bm-z').value)||null,
+        lat:   document.getElementById('bm-x').value !== '' ? parseFloat(document.getElementById('bm-x').value) : null,
+        lon:   document.getElementById('bm-y').value !== '' ? parseFloat(document.getElementById('bm-y').value) : null,
+        z:     document.getElementById('bm-z').value  !== '' ? parseFloat(document.getElementById('bm-z').value)  : null,
         notes: document.getElementById('bm-notes').value.trim(),
         tags:  document.getElementById('bm-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
     };
@@ -1043,25 +1052,40 @@ async function deleteBm(id) {
 }
 
 function renderBookmarks() {
-    const q  = (document.getElementById('bm-search')?.value||'').toLowerCase();
-    const fl = gBm.filter(b=>b.system.toLowerCase().includes(q)||(b.notes||'').toLowerCase().includes(q)||(b.tags||[]).some(t=>t.toLowerCase().includes(q)));
+    const q   = (document.getElementById('bm-search')?.value||'').toLowerCase();
+    const tag = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
+    const fl  = gBm.filter(b => {
+        const textMatch = !q || (
+            b.system.toLowerCase().includes(q) ||
+            (b.notes||'').toLowerCase().includes(q) ||
+            (b.tags||[]).some(t=>t.toLowerCase().includes(q))
+        );
+        const tagMatch  = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        return textMatch && tagMatch;
+    });
     const c  = document.getElementById('bm-grid');
     if (fl.length===0) {
         c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">◎</div><div class="empty-txt">${gBm.length===0?'No bookmarks yet.':'No bookmarks match.'}</div></div>`;
         return;
     }
-    c.innerHTML = fl.map(b=>`
+    c.innerHTML = fl.map(b=>{
+        const hasCoords = b.lat !== null && b.lat !== undefined && b.lon !== null && b.lon !== undefined;
+        const coordStr  = hasCoords
+            ? `Lat: ${b.lat}  Lon: ${b.lon}${(b.z !== null && b.z !== undefined) ? '  Alt: '+b.z : ''}`
+            : '';
+        return `
         <div class="bm-card">
             <div class="bm-sys">${b.system}</div>
             <div class="bm-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type}</div>
             ${b.notes?`<div class="bm-notes">${b.notes}</div>`:''}
-            ${b.x!==null&&b.y!==null?`<div class="bm-coords">X:${b.x} Y:${b.y}${b.z!==null?' Z:'+b.z:''}</div>`:''}
-            ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            ${hasCoords?`<div class="bm-coords">${coordStr}</div>`:''}
+            ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBmsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts" style="margin-top:10px">
                 <button class="btn btn-c btn-sm" onclick="openBmModal('${b.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteBm('${b.id}')">Delete</button>
             </div>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1404,6 +1428,28 @@ async function importData() {
     } else if (res.error) {
         toast('⚠ Import failed: ' + res.error);
     }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAG FILTER HELPERS — clicking a tag populates the filter box
+// ══════════════════════════════════════════════════════════════════
+function filterLogsByTag(tag) {
+    // Navigate to logs view if not already there
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelector('.nav-item[data-view="logs"]').classList.add('active');
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    document.getElementById('view-logs').classList.add('active');
+    const tf = document.getElementById('log-tag-filter');
+    tf.value = tag;
+    renderLogs();
+    tf.focus();
+}
+
+function filterBmsByTag(tag) {
+    const tf = document.getElementById('bm-tag-filter');
+    tf.value = tag;
+    renderBookmarks();
+    tf.focus();
 }
 
 // Modal overlay close

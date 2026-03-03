@@ -43,8 +43,8 @@ async function initDB() {
             ts     INTEGER NOT NULL,
             system TEXT NOT NULL,
             type   TEXT DEFAULT 'POI',
-            x      REAL,
-            y      REAL,
+            lat    REAL,
+            lon    REAL,
             z      REAL,
             notes  TEXT,
             tags   TEXT DEFAULT '[]'
@@ -54,6 +54,16 @@ async function initDB() {
             ts   INTEGER NOT NULL
         );
     `);
+
+    // Migration: rename x/y columns to lat/lon if they still exist from an older DB
+    try {
+        const cols = queryAll(`PRAGMA table_info(bookmarks)`).map(r => r.name);
+        if (cols.includes('x') && !cols.includes('lat')) {
+            db.run(`ALTER TABLE bookmarks RENAME COLUMN x TO lat`);
+            db.run(`ALTER TABLE bookmarks RENAME COLUMN y TO lon`);
+            console.log('Migrated bookmarks: x→lat, y→lon');
+        }
+    } catch(e) { console.warn('Migration check skipped:', e.message); }
 
     // Flush immediately on first init so the file exists
     flushDB();
@@ -311,9 +321,27 @@ function startSyncServer() {
                         system: getSetting('system'),
                     },
                     ts: Date.now(),
+                    schema_version: 2,   // v2 uses lat/lon instead of x/y
                 };
                 res.writeHead(200);
                 res.end(JSON.stringify(payload));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── GET /sync/status — lightweight health + metadata for Android ─────
+        } else if (req.method === 'GET' && req.url === '/sync/status') {
+            try {
+                const bmCount  = queryGet('SELECT COUNT(*) as n FROM bookmarks')?.n ?? 0;
+                const logCount = queryGet('SELECT COUNT(*) as n FROM logs')?.n ?? 0;
+                res.writeHead(200);
+                res.end(JSON.stringify({
+                    ok: true, app: 'CMDRSYS', schema_version: 2,
+                    ts: Date.now(),
+                    counts: { bookmarks: bmCount, logs: logCount },
+                    cmdr: getSetting('cmdr'), system: getSetting('system'),
+                }));
             } catch (e) {
                 res.writeHead(500);
                 res.end(JSON.stringify({ error: e.message }));
@@ -329,16 +357,19 @@ function startSyncServer() {
                     let changed = false;
 
                     // Merge bookmarks — last ts wins per id
+                    // Accept both legacy {x,y} and new {lat,lon} field names from Android
                     if (Array.isArray(data.bookmarks)) {
                         data.bookmarks.forEach(b => {
                             const existing = queryGet('SELECT ts FROM bookmarks WHERE id = ?', [b.id]);
                             if (!existing || existing.ts < b.ts) {
+                                const lat = b.lat ?? b.x ?? null;
+                                const lon = b.lon ?? b.y ?? null;
                                 db.run(
                                     `INSERT OR REPLACE INTO bookmarks
-                                     (id,ts,system,type,x,y,z,notes,tags)
+                                     (id,ts,system,type,lat,lon,z,notes,tags)
                                      VALUES (?,?,?,?,?,?,?,?,?)`,
                                     [b.id, b.ts, b.system, b.type || 'POI',
-                                     b.x ?? null, b.y ?? null, b.z ?? null,
+                                     lat, lon, b.z ?? null,
                                      b.notes || '', JSON.stringify(b.tags || [])]
                                 );
                                 changed = true;
@@ -384,6 +415,34 @@ function startSyncServer() {
         } else if (req.method === 'GET' && req.url === '/ping') {
             res.writeHead(200);
             res.end(JSON.stringify({ ok: true, app: 'CMDRSYS', ts: Date.now() }));
+
+        // ── DELETE /sync/bookmark/:id — Android deletes a bookmark ───────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/bookmark/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/bookmark/'.length));
+            try {
+                db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── DELETE /sync/log/:id — Android deletes a log entry ───────────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/log/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/log/'.length));
+            try {
+                db.run('DELETE FROM logs WHERE id = ?', [id]);
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
 
         } else {
             res.writeHead(404);
@@ -507,8 +566,8 @@ ipcMain.handle('bookmarks:getAll', () =>
         .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') }))
 );
 ipcMain.handle('bookmarks:save', (_, b) => {
-    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,x,y,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [b.id, b.ts, b.system, b.type||'POI', b.x??null, b.y??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[])]);
+    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)`,
+        [b.id, b.ts, b.system, b.type||'POI', b.lat??null, b.lon??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[])]);
     saveDB(); return true;
 });
 ipcMain.handle('bookmarks:delete', (_, id) => {
@@ -621,7 +680,12 @@ ipcMain.handle('import:json', async () => {
         const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
         if (data.settings)  data.settings.forEach(r  => db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', [r.key, r.value]));
         if (data.logs)      data.logs.forEach(r       => db.run('INSERT OR REPLACE INTO logs (id,ts,title,system,body,content,tags) VALUES (?,?,?,?,?,?,?)', [r.id,r.ts,r.title,r.system,r.body,r.content,r.tags]));
-        if (data.bookmarks) data.bookmarks.forEach(r  => db.run('INSERT OR REPLACE INTO bookmarks (id,ts,system,type,x,y,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)', [r.id,r.ts,r.system,r.type,r.x,r.y,r.z,r.notes,r.tags]));
+        if (data.bookmarks) data.bookmarks.forEach(r  => {
+            // Accept both legacy x/y and new lat/lon field names
+            const lat = r.lat ?? r.x ?? null;
+            const lon = r.lon ?? r.y ?? null;
+            db.run('INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)', [r.id,r.ts,r.system,r.type,lat,lon,r.z,r.notes,r.tags]);
+        });
         if (data.visited)   data.visited.forEach(r    => db.run('INSERT OR IGNORE INTO visited (name,ts) VALUES (?,?)', [r.name, r.ts]));
         flushDB();
         return { ok: true };
