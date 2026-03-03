@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
+const http = require('http');
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 const USER_DATA = app.getPath('userData');
@@ -42,8 +43,8 @@ async function initDB() {
             ts     INTEGER NOT NULL,
             system TEXT NOT NULL,
             type   TEXT DEFAULT 'POI',
-            x      REAL,
-            y      REAL,
+            lat    REAL,
+            lon    REAL,
             z      REAL,
             notes  TEXT,
             tags   TEXT DEFAULT '[]'
@@ -53,6 +54,16 @@ async function initDB() {
             ts   INTEGER NOT NULL
         );
     `);
+
+    // Migration: rename x/y columns to lat/lon if they still exist from an older DB
+    try {
+        const cols = queryAll(`PRAGMA table_info(bookmarks)`).map(r => r.name);
+        if (cols.includes('x') && !cols.includes('lat')) {
+            db.run(`ALTER TABLE bookmarks RENAME COLUMN x TO lat`);
+            db.run(`ALTER TABLE bookmarks RENAME COLUMN y TO lon`);
+            console.log('Migrated bookmarks: x→lat, y→lon');
+        }
+    } catch(e) { console.warn('Migration check skipped:', e.message); }
 
     // Flush immediately on first init so the file exists
     flushDB();
@@ -243,6 +254,230 @@ function processLiveChunk(text) {
     }
 }
 
+// ─── Sync Server ──────────────────────────────────────────────────────────────
+// Runs a local HTTP server on the LAN so the Android app can pull/push data.
+// Default port: 45678. Token is optional but recommended for security.
+
+const SYNC_PORT = 45678;
+let syncServer  = null;
+
+function getLocalIP() {
+    const saved = getSetting('syncServerIP', '');
+    if (saved) return saved;
+    const nets = os.networkInterfaces();
+    for (const ifaces of Object.values(nets)) {
+        for (const iface of ifaces) {
+            if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+        }
+    }
+    return 'localhost';
+}
+
+// Returns all non-loopback IPv4 interfaces so the user can pick the right one
+function getAllNetworkInterfaces() {
+    const nets = os.networkInterfaces();
+    const results = [];
+    for (const [name, ifaces] of Object.entries(nets)) {
+        for (const iface of ifaces) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                results.push({ name, address: iface.address });
+            }
+        }
+    }
+    return results;
+}
+
+function startSyncServer() {
+    if (syncServer) return; // already running
+
+    syncServer = http.createServer((req, res) => {
+        // CORS — needed so the Android WebView can reach us
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Sync-Token');
+        res.setHeader('Content-Type', 'application/json');
+
+        if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+        // Optional auth token
+        const token = getSetting('syncToken', '');
+        if (token && req.headers['x-sync-token'] !== token) {
+            res.writeHead(401);
+            res.end(JSON.stringify({ error: 'Unauthorized — wrong sync token' }));
+            return;
+        }
+
+        // ── GET /sync — Android pulls all syncable data ──────────────────────
+        if (req.method === 'GET' && req.url === '/sync') {
+            try {
+                const payload = {
+                    bookmarks: queryAll('SELECT * FROM bookmarks ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    logs:      queryAll('SELECT * FROM logs ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    settings: {
+                        cmdr:   getSetting('cmdr'),
+                        ship:   getSetting('ship'),
+                        system: getSetting('system'),
+                    },
+                    ts: Date.now(),
+                    schema_version: 2,   // v2 uses lat/lon instead of x/y
+                };
+                res.writeHead(200);
+                res.end(JSON.stringify(payload));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── GET /sync/status — lightweight health + metadata for Android ─────
+        } else if (req.method === 'GET' && req.url === '/sync/status') {
+            try {
+                const bmCount  = queryGet('SELECT COUNT(*) as n FROM bookmarks')?.n ?? 0;
+                const logCount = queryGet('SELECT COUNT(*) as n FROM logs')?.n ?? 0;
+                res.writeHead(200);
+                res.end(JSON.stringify({
+                    ok: true, app: 'CMDRSYS', schema_version: 2,
+                    ts: Date.now(),
+                    counts: { bookmarks: bmCount, logs: logCount },
+                    cmdr: getSetting('cmdr'), system: getSetting('system'),
+                }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── POST /sync — Android pushes its local changes ────────────────────
+        } else if (req.method === 'POST' && req.url === '/sync') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    let changed = false;
+
+                    // Merge bookmarks — last ts wins per id
+                    // Accept both legacy {x,y} and new {lat,lon} field names from Android
+                    if (Array.isArray(data.bookmarks)) {
+                        data.bookmarks.forEach(b => {
+                            const existing = queryGet('SELECT ts FROM bookmarks WHERE id = ?', [b.id]);
+                            if (!existing || existing.ts < b.ts) {
+                                const lat = b.lat ?? b.x ?? null;
+                                const lon = b.lon ?? b.y ?? null;
+                                db.run(
+                                    `INSERT OR REPLACE INTO bookmarks
+                                     (id,ts,system,type,lat,lon,z,notes,tags)
+                                     VALUES (?,?,?,?,?,?,?,?,?)`,
+                                    [b.id, b.ts, b.system, b.type || 'POI',
+                                     lat, lon, b.z ?? null,
+                                     b.notes || '', JSON.stringify(b.tags || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    // Merge logs — last ts wins per id
+                    if (Array.isArray(data.logs)) {
+                        data.logs.forEach(l => {
+                            const existing = queryGet('SELECT ts FROM logs WHERE id = ?', [l.id]);
+                            if (!existing || existing.ts < l.ts) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO logs
+                                     (id,ts,title,system,body,content,tags)
+                                     VALUES (?,?,?,?,?,?,?)`,
+                                    [l.id, l.ts, l.title, l.system || '',
+                                     l.body || '', l.content, JSON.stringify(l.tags || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    if (changed) {
+                        saveDB();
+                        // Notify renderer to refresh its in-memory data
+                        if (win && !win.isDestroyed()) {
+                            win.webContents.send('sync:dataUpdated');
+                        }
+                    }
+
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ ok: true, changed }));
+                } catch (e) {
+                    console.error('Sync POST error:', e);
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: e.message }));
+                }
+            });
+
+        // ── GET /ping — health check so Android can test connectivity ─────────
+        } else if (req.method === 'GET' && req.url === '/ping') {
+            res.writeHead(200);
+            res.end(JSON.stringify({ ok: true, app: 'CMDRSYS', ts: Date.now() }));
+
+        // ── DELETE /sync/bookmark/:id — Android deletes a bookmark ───────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/bookmark/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/bookmark/'.length));
+            try {
+                db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── DELETE /sync/log/:id — Android deletes a log entry ───────────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/log/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/log/'.length));
+            try {
+                db.run('DELETE FROM logs WHERE id = ?', [id]);
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        } else {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Not found' }));
+        }
+    });
+
+    syncServer.on('error', (e) => {
+        console.error('Sync server error:', e.message);
+    });
+
+    syncServer.listen(SYNC_PORT, '0.0.0.0', () => {
+        const ip = getLocalIP();
+        console.log(`CMDRSYS sync server running at http://${ip}:${SYNC_PORT}`);
+        setSetting('syncServerPort', String(SYNC_PORT));
+        // Only auto-set IP if user hasn't chosen one yet
+        if (!getSetting('syncServerIP', '')) setSetting('syncServerIP', ip);
+        saveDB();
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('sync:serverStarted', {
+                ip:         getSetting('syncServerIP', ip),
+                port:       SYNC_PORT,
+                interfaces: getAllNetworkInterfaces(),
+            });
+        }
+    });
+}
+
+function stopSyncServer() {
+    if (syncServer) {
+        syncServer.close();
+        syncServer = null;
+    }
+}
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 let win;
 function createWindow() {
@@ -266,12 +501,14 @@ function createWindow() {
 // Window opens FIRST, then journals load in response to renderer:ready
 app.whenReady().then(async () => {
     await initDB();
-    createWindow();   // ← opens immediately, no blocking work before this
+    createWindow();
+    startSyncServer();   // ← start sync server alongside the app
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on('window-all-closed', () => {
     if (journalWatcher) journalWatcher.close();
+    stopSyncServer();
     if (process.platform !== 'darwin') app.quit();
 });
 
@@ -281,7 +518,6 @@ ipcMain.on('window:maximize', () => win.isMaximized() ? win.unmaximize() : win.m
 ipcMain.on('window:close',    () => win.close());
 
 // ─── renderer:ready — triggered by renderer on mount ─────────────────────────
-// This is where the journal loading actually happens, safely after the window exists
 ipcMain.handle('renderer:ready', () => {
     const savedDir   = getSetting('journal_dir', '');
     const journalDir = savedDir || getDefaultJournalDir();
@@ -290,8 +526,6 @@ ipcMain.handle('renderer:ready', () => {
         return { autoLoaded: false, reason: 'No journal directory found' };
     }
 
-    // Run synchronously but NOW the window is open so it won't block startup
-    // Progress events are pushed to the renderer during the loop above
     try {
         const result = loadAllJournals(journalDir);
         return { autoLoaded: true, ...result };
@@ -332,8 +566,8 @@ ipcMain.handle('bookmarks:getAll', () =>
         .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') }))
 );
 ipcMain.handle('bookmarks:save', (_, b) => {
-    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,x,y,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [b.id, b.ts, b.system, b.type||'POI', b.x??null, b.y??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[])]);
+    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)`,
+        [b.id, b.ts, b.system, b.type||'POI', b.lat??null, b.lon??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[])]);
     saveDB(); return true;
 });
 ipcMain.handle('bookmarks:delete', (_, id) => {
@@ -353,7 +587,6 @@ ipcMain.handle('visited:clear', () => {
 });
 
 // ─── Journal Events IPC ───────────────────────────────────────────────────────
-// Events live in memory (memEvents), not SQLite — avoids huge DB growth
 ipcMain.handle('journal:getEvents', () => memEvents);
 ipcMain.handle('journal:clearEvents', () => { memEvents = []; return true; });
 
@@ -380,6 +613,37 @@ ipcMain.handle('journal:open', async () => {
 
 ipcMain.handle('journal:stopWatch', () => {
     if (journalWatcher) { journalWatcher.close(); journalWatcher = null; }
+    return true;
+});
+
+// ─── Sync IPC ─────────────────────────────────────────────────────────────────
+ipcMain.handle('sync:getInfo', () => {
+    const ip         = getSetting('syncServerIP',   getLocalIP());
+    const port       = getSetting('syncServerPort', String(SYNC_PORT));
+    const token      = getSetting('syncToken', '');
+    const interfaces = getAllNetworkInterfaces();
+    return { ip, port: Number(port), token, running: !!syncServer, interfaces };
+});
+
+ipcMain.handle('sync:setIP', (_, ip) => {
+    setSetting('syncServerIP', ip);
+    saveDB();
+    // Notify renderer immediately so the address box updates
+    if (win && !win.isDestroyed()) {
+        win.webContents.send('sync:ipChanged', { ip, port: SYNC_PORT });
+    }
+    return true;
+});
+
+ipcMain.handle('sync:setToken', (_, token) => {
+    setSetting('syncToken', token);
+    saveDB();
+    return true;
+});
+
+ipcMain.handle('sync:restart', () => {
+    stopSyncServer();
+    startSyncServer();
     return true;
 });
 
@@ -416,7 +680,12 @@ ipcMain.handle('import:json', async () => {
         const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
         if (data.settings)  data.settings.forEach(r  => db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', [r.key, r.value]));
         if (data.logs)      data.logs.forEach(r       => db.run('INSERT OR REPLACE INTO logs (id,ts,title,system,body,content,tags) VALUES (?,?,?,?,?,?,?)', [r.id,r.ts,r.title,r.system,r.body,r.content,r.tags]));
-        if (data.bookmarks) data.bookmarks.forEach(r  => db.run('INSERT OR REPLACE INTO bookmarks (id,ts,system,type,x,y,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)', [r.id,r.ts,r.system,r.type,r.x,r.y,r.z,r.notes,r.tags]));
+        if (data.bookmarks) data.bookmarks.forEach(r  => {
+            // Accept both legacy x/y and new lat/lon field names
+            const lat = r.lat ?? r.x ?? null;
+            const lon = r.lon ?? r.y ?? null;
+            db.run('INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)', [r.id,r.ts,r.system,r.type,lat,lon,r.z,r.notes,r.tags]);
+        });
         if (data.visited)   data.visited.forEach(r    => db.run('INSERT OR IGNORE INTO visited (name,ts) VALUES (?,?)', [r.name, r.ts]));
         flushDB();
         return { ok: true };

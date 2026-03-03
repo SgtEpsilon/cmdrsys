@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self';">
     <title>CMDRSYS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -215,6 +215,8 @@
         .log-entry-body { font-family:var(--font-body); font-size:16px; color:var(--text-primary); line-height:1.6; opacity:0.85; user-select:text; }
         .tag-row { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
         .tag { font-family:var(--font-mono); font-size:10px; padding:2px 6px; border:1px solid var(--border-c); color:var(--ed-cyan); letter-spacing:1px; }
+        .tag-clickable { cursor:pointer; transition:background 0.12s, border-color 0.12s; }
+        .tag-clickable:hover { background:rgba(0,212,255,0.18); border-color:var(--ed-cyan); }
         .entry-acts { display:flex; gap:6px; margin-top:10px; }
 
         /* ── BOOKMARKS ───────────────────────────── */
@@ -315,6 +317,10 @@
         /* Toast notification */
         #toast { position:fixed; bottom:40px; right:20px; font-family:var(--font-mono); font-size:12px; padding:8px 16px; border:1px solid var(--ed-orange); background:var(--bg-panel); color:var(--ed-orange); z-index:9999; opacity:0; transition:opacity 0.3s; pointer-events:none; letter-spacing:1px; }
         #toast.show { opacity:1; }
+
+        /* Sync server address box */
+        .sync-addr { font-family:var(--font-mono); font-size:13px; color:var(--ed-cyan); background:rgba(0,212,255,0.07); border:1px solid var(--border-c); padding:10px 14px; letter-spacing:1px; user-select:text; margin-bottom:12px; word-break:break-all; }
+        .sync-dot  { display:inline-block; width:8px; height:8px; border-radius:50%; background:#00FF88; margin-right:8px; box-shadow:0 0 6px rgba(0,255,136,0.7); animation:blink 2s ease-in-out infinite; }
     </style>
 </head>
 <body>
@@ -440,6 +446,7 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="log-search" placeholder="SEARCH LOG ENTRIES..." oninput="debouncedRenderLogs()">
+            <input type="text" class="search-in" id="log-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderLogs()">
         </div>
         <div id="log-list"></div>
     </div>
@@ -455,6 +462,7 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
+            <input type="text" class="search-in" id="bm-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderBookmarks()">
         </div>
         <div id="bm-grid" class="bm-grid"></div>
     </div>
@@ -539,6 +547,62 @@
                 <div>JOURNAL EVENTS: <span id="db-jev">0</span> records</div>
             </div>
         </div>
+
+        <!-- SYNC SERVER PANEL -->
+        <div class="panel">
+            <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                CMDRSYS runs a local sync server so your Android app can auto-sync bookmarks and log entries over WiFi.
+                Both devices must be on the same network. Enter the address shown below into the Android app's Settings › Sync tab.
+            </div>
+
+            <!-- Status row -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-family:var(--font-mono);font-size:10px">
+                <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(255,98,0,0.4);flex-shrink:0"></span>
+                <span id="sync-status-txt" style="color:var(--text-dim)">Starting sync server...</span>
+            </div>
+
+            <!-- Network interface picker -->
+            <div class="form-group">
+                <label class="form-lbl">Network Interface — pick the adapter your phone shares</label>
+                <div style="display:flex;gap:8px;align-items:stretch">
+                    <select class="form-input form-sel" id="sync-iface-sel" style="flex:1" onchange="onSyncIfaceChange()">
+                        <option value="">— loading —</option>
+                    </select>
+                    <button class="btn btn-c btn-sm" onclick="refreshSyncInterfaces()" title="Refresh">↺ Refresh</button>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:5px">
+                    Pick a 192.168.x.x address that matches the same network your Android phone is on.
+                </div>
+            </div>
+
+            <!-- Address box -->
+            <div class="form-group">
+                <label class="form-lbl">Android Sync URL — paste this into the Android app</label>
+                <div id="sync-addr-box" class="sync-addr" style="display:none;cursor:pointer" onclick="copySyncUrl()" title="Click to copy">
+                    <span id="sync-addr-url"></span>
+                    <span style="margin-left:12px;font-size:10px;color:var(--text-dim)">[click to copy]</span>
+                </div>
+                <div id="sync-addr-none" style="font-family:var(--font-mono);font-size:11px;color:var(--ed-orange)">Waiting for server...</div>
+            </div>
+
+            <!-- Token -->
+            <div class="form-group">
+                <label class="form-lbl">Optional Security Token</label>
+                <div style="display:flex;gap:8px">
+                    <input type="text" class="form-input" id="sync-token-in" placeholder="Leave empty for no auth" style="flex:1">
+                    <button class="btn btn-c btn-sm" onclick="saveSyncToken()">Save Token</button>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:4px">
+                    Set the same token in the Android app to prevent unauthorised access.
+                </div>
+            </div>
+
+            <div id="sync-last-row" style="display:none;margin-top:4px">
+                <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Last sync received from Android: </span>
+                <span id="sync-last-ts" style="font-family:var(--font-mono);font-size:9px;color:var(--ed-cyan)">—</span>
+            </div>
+        </div>
     </div>
 
 </div><!-- /main -->
@@ -598,9 +662,9 @@
         </div>
     </div>
     <div class="form-row3">
-        <div class="form-group"><label class="form-lbl">Coord X</label><input type="number" class="form-input" id="bm-x" placeholder="0.00" step="0.01"></div>
-        <div class="form-group"><label class="form-lbl">Coord Y</label><input type="number" class="form-input" id="bm-y" placeholder="0.00" step="0.01"></div>
-        <div class="form-group"><label class="form-lbl">Coord Z</label><input type="number" class="form-input" id="bm-z" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><label class="form-lbl">Latitude</label><input type="number" class="form-input" id="bm-x" placeholder="0.0000" step="any" min="-90" max="90"></div>
+        <div class="form-group"><label class="form-lbl">Longitude</label><input type="number" class="form-input" id="bm-y" placeholder="0.0000" step="any" min="-180" max="180"></div>
+        <div class="form-group"><label class="form-lbl">Altitude / Depth</label><input type="number" class="form-input" id="bm-z" placeholder="0.00" step="any"></div>
     </div>
     <div class="form-group"><label class="form-lbl">Notes</label><textarea class="form-ta" id="bm-notes" rows="4" placeholder="Interesting features, resources..."></textarea></div>
     <div class="form-group"><label class="form-lbl">Tags (comma separated)</label><input type="text" class="form-input" id="bm-tags" placeholder="nebula, earth-like, neutron..."></div>
@@ -896,12 +960,17 @@ async function deleteLog(id) {
 }
 
 function renderLogs() {
-    const q  = (document.getElementById('log-search')?.value||'').toLowerCase();
-    const fl = gLogs.filter(l=>
-        l.title.toLowerCase().includes(q)||
-        (l.system||'').toLowerCase().includes(q)||
-        l.content.toLowerCase().includes(q)
-    );
+    const q   = (document.getElementById('log-search')?.value||'').toLowerCase();
+    const tag = (document.getElementById('log-tag-filter')?.value||'').toLowerCase().trim();
+    const fl  = gLogs.filter(l => {
+        const textMatch = !q || (
+            l.title.toLowerCase().includes(q) ||
+            (l.system||'').toLowerCase().includes(q) ||
+            l.content.toLowerCase().includes(q)
+        );
+        const tagMatch  = !tag || (l.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        return textMatch && tagMatch;
+    });
     const c = document.getElementById('log-list');
     if (fl.length===0) {
         c.innerHTML = `<div class="empty"><div class="empty-icon">◉</div><div class="empty-txt">${gLogs.length===0?'No log entries yet.':'No entries match your search.'}</div></div>`;
@@ -918,7 +987,7 @@ function renderLogs() {
             </div>
             <div class="log-entry-date">◈ ${edDate(e.ts)}</div>
             <div class="log-entry-body">${e.content.replace(/\n/g,'<br>')}</div>
-            ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag tag-clickable" onclick="filterLogsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts">
                 <button class="btn btn-c btn-sm" onclick="openLogModal('${e.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteLog('${e.id}')">Delete</button>
@@ -940,9 +1009,9 @@ function openBmModal(id, prefillSys) {
         const b = gBm.find(x=>x.id===id);
         document.getElementById('bm-sys').value   = b.system;
         document.getElementById('bm-type').value  = b.type;
-        document.getElementById('bm-x').value     = b.x??'';
-        document.getElementById('bm-y').value     = b.y??'';
-        document.getElementById('bm-z').value     = b.z??'';
+        document.getElementById('bm-x').value     = b.lat ?? b.x ?? '';
+        document.getElementById('bm-y').value     = b.lon ?? b.y ?? '';
+        document.getElementById('bm-z').value     = b.z ?? '';
         document.getElementById('bm-notes').value = b.notes||'';
         document.getElementById('bm-tags').value  = (b.tags||[]).join(', ');
     } else {
@@ -962,9 +1031,9 @@ async function saveBm() {
     const bm = {
         id:    id||Date.now().toString(), ts:Date.now(), system,
         type:  document.getElementById('bm-type').value,
-        x:     parseFloat(document.getElementById('bm-x').value)||null,
-        y:     parseFloat(document.getElementById('bm-y').value)||null,
-        z:     parseFloat(document.getElementById('bm-z').value)||null,
+        lat:   document.getElementById('bm-x').value !== '' ? parseFloat(document.getElementById('bm-x').value) : null,
+        lon:   document.getElementById('bm-y').value !== '' ? parseFloat(document.getElementById('bm-y').value) : null,
+        z:     document.getElementById('bm-z').value  !== '' ? parseFloat(document.getElementById('bm-z').value)  : null,
         notes: document.getElementById('bm-notes').value.trim(),
         tags:  document.getElementById('bm-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
     };
@@ -983,25 +1052,40 @@ async function deleteBm(id) {
 }
 
 function renderBookmarks() {
-    const q  = (document.getElementById('bm-search')?.value||'').toLowerCase();
-    const fl = gBm.filter(b=>b.system.toLowerCase().includes(q)||(b.notes||'').toLowerCase().includes(q)||(b.tags||[]).some(t=>t.toLowerCase().includes(q)));
+    const q   = (document.getElementById('bm-search')?.value||'').toLowerCase();
+    const tag = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
+    const fl  = gBm.filter(b => {
+        const textMatch = !q || (
+            b.system.toLowerCase().includes(q) ||
+            (b.notes||'').toLowerCase().includes(q) ||
+            (b.tags||[]).some(t=>t.toLowerCase().includes(q))
+        );
+        const tagMatch  = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        return textMatch && tagMatch;
+    });
     const c  = document.getElementById('bm-grid');
     if (fl.length===0) {
         c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">◎</div><div class="empty-txt">${gBm.length===0?'No bookmarks yet.':'No bookmarks match.'}</div></div>`;
         return;
     }
-    c.innerHTML = fl.map(b=>`
+    c.innerHTML = fl.map(b=>{
+        const hasCoords = b.lat !== null && b.lat !== undefined && b.lon !== null && b.lon !== undefined;
+        const coordStr  = hasCoords
+            ? `Lat: ${b.lat}  Lon: ${b.lon}${(b.z !== null && b.z !== undefined) ? '  Alt: '+b.z : ''}`
+            : '';
+        return `
         <div class="bm-card">
             <div class="bm-sys">${b.system}</div>
             <div class="bm-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type}</div>
             ${b.notes?`<div class="bm-notes">${b.notes}</div>`:''}
-            ${b.x!==null&&b.y!==null?`<div class="bm-coords">X:${b.x} Y:${b.y}${b.z!==null?' Z:'+b.z:''}</div>`:''}
-            ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            ${hasCoords?`<div class="bm-coords">${coordStr}</div>`:''}
+            ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBmsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts" style="margin-top:10px">
                 <button class="btn btn-c btn-sm" onclick="openBmModal('${b.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteBm('${b.id}')">Delete</button>
             </div>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1203,7 +1287,119 @@ async function loadSettings() {
     document.getElementById('db-bm').textContent   = gBm.length;
     document.getElementById('db-vis').textContent  = gVisited.length;
     document.getElementById('db-jev').textContent  = gJEvents.length;
+    // Populate sync info
+    loadSyncInfo();
 }
+
+// ── Sync server UI ────────────────────────────────────────────────────────────
+
+function setSyncAddrDisplay(ip, port) {
+    const box  = document.getElementById('sync-addr-box');
+    const none = document.getElementById('sync-addr-none');
+    const url  = document.getElementById('sync-addr-url');
+    if (ip && port) {
+        url.textContent    = `http://${ip}:${port}`;
+        box.style.display  = 'block';
+        if (none) none.style.display = 'none';
+    } else {
+        box.style.display  = 'none';
+        if (none) none.style.display = 'block';
+    }
+}
+
+function setSyncStatusDot(running) {
+    const dot = document.getElementById('sync-dot');
+    const txt = document.getElementById('sync-status-txt');
+    if (!dot) return;
+    if (running) {
+        dot.style.background = '#00FF88';
+        dot.style.boxShadow  = '0 0 6px rgba(0,255,136,0.7)';
+        txt.textContent      = 'Sync server active';
+        txt.style.color      = '#00FF88';
+    } else {
+        dot.style.background = 'rgba(255,98,0,0.4)';
+        dot.style.boxShadow  = 'none';
+        txt.textContent      = 'Sync server not running';
+        txt.style.color      = 'var(--ed-orange)';
+    }
+}
+
+function populateIfaceDropdown(interfaces, selectedIP) {
+    const sel = document.getElementById('sync-iface-sel');
+    if (!sel) return;
+    sel.innerHTML = '';
+    if (!interfaces || interfaces.length === 0) {
+        sel.innerHTML = '<option value="">— no interfaces found —</option>';
+        return;
+    }
+    interfaces.forEach(iface => {
+        const opt = document.createElement('option');
+        opt.value       = iface.address;
+        opt.textContent = `${iface.address}  (${iface.name})`;
+        if (iface.address === selectedIP) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadSyncInfo() {
+    const info = await window.api.getSyncInfo();
+    setSyncStatusDot(info.running);
+    setSyncAddrDisplay(info.ip, info.port);
+    populateIfaceDropdown(info.interfaces, info.ip);
+    document.getElementById('sync-token-in').value = info.token || '';
+}
+
+async function refreshSyncInterfaces() {
+    const info = await window.api.getSyncInfo();
+    populateIfaceDropdown(info.interfaces, info.ip);
+    toast('↺ Interface list refreshed');
+}
+
+async function onSyncIfaceChange() {
+    const sel = document.getElementById('sync-iface-sel');
+    const ip  = sel.value;
+    if (!ip) return;
+    await window.api.setSyncIP(ip);
+    setSyncAddrDisplay(ip, 45678);
+    toast(`◈ Sync address set to ${ip}`);
+}
+
+function copySyncUrl() {
+    const url = document.getElementById('sync-addr-url').textContent;
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => toast('◈ URL copied to clipboard'));
+}
+
+async function saveSyncToken() {
+    const token = document.getElementById('sync-token-in').value.trim();
+    await window.api.setSyncToken(token);
+    toast(token ? '◈ Sync token saved' : '◈ Sync token cleared (no auth)');
+}
+
+// Listen for sync server coming online (happens after initDB)
+window.api.onSyncServerStarted(info => {
+    setSyncStatusDot(true);
+    setSyncAddrDisplay(info.ip, info.port);
+    populateIfaceDropdown(info.interfaces, info.ip);
+});
+
+// Listen for IP change confirmation from main
+window.api.onSyncIpChanged(info => {
+    setSyncAddrDisplay(info.ip, info.port);
+    const sel = document.getElementById('sync-iface-sel');
+    if (sel) sel.value = info.ip;
+});
+
+// Listen for Android push — refresh data without full reload
+window.api.onSyncDataUpdated(async () => {
+    gLogs    = await window.api.getLogs();
+    gBm      = await window.api.getBookmarks();
+    gVisited = await window.api.getVisited();
+    updateDash(); updateBadges();
+    document.getElementById('sync-last-ts').textContent = new Date().toLocaleTimeString();
+    document.getElementById('sync-last-row').style.display = 'block';
+    toast('↔ Sync data received from Android');
+});
 
 async function saveProfile() {
     const cmdr = document.getElementById('set-cmdr').value.trim().toUpperCase();
@@ -1232,6 +1428,28 @@ async function importData() {
     } else if (res.error) {
         toast('⚠ Import failed: ' + res.error);
     }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAG FILTER HELPERS — clicking a tag populates the filter box
+// ══════════════════════════════════════════════════════════════════
+function filterLogsByTag(tag) {
+    // Navigate to logs view if not already there
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelector('.nav-item[data-view="logs"]').classList.add('active');
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    document.getElementById('view-logs').classList.add('active');
+    const tf = document.getElementById('log-tag-filter');
+    tf.value = tag;
+    renderLogs();
+    tf.focus();
+}
+
+function filterBmsByTag(tag) {
+    const tf = document.getElementById('bm-tag-filter');
+    tf.value = tag;
+    renderBookmarks();
+    tf.focus();
 }
 
 // Modal overlay close

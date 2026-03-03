@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self';">
+    <title>CMDRSYS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-void:  #020609;
+            --bg-panel: #050e18;
+            --ed-orange: #FF6200;
+            --ed-orange-dim: rgba(255,98,0,0.3);
+            --ed-cyan:   #00D4FF;
+            --ed-cyan-dim: rgba(0,212,255,0.25);
+            --text-primary: #D8EEFF;
+            --text-dim: #4A6A8A;
+            --border-o: rgba(255,98,0,0.45);
+            --border-c: rgba(0,212,255,0.3);
+            --font-hud:  'Orbitron', monospace;
+            --font-body: 'Exo 2', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --titlebar-h: 36px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+
+        html, body {
+            height: 100vh; overflow: hidden;
+            background: var(--bg-void);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            user-select: none;
+        }
+
+        /* Starfield bg */
+        body::before {
+            content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+            background-image:
+                radial-gradient(1px 1px at 8% 15%, rgba(255,255,255,0.9) 0%,transparent 100%),
+                radial-gradient(1px 1px at 23% 72%, rgba(255,255,255,0.6) 0%,transparent 100%),
+                radial-gradient(1px 1px at 41% 33%, rgba(255,255,255,0.8) 0%,transparent 100%),
+                radial-gradient(1px 1px at 57% 88%, rgba(255,255,255,0.5) 0%,transparent 100%),
+                radial-gradient(1px 1px at 73% 20%, rgba(255,255,255,0.9) 0%,transparent 100%),
+                radial-gradient(1px 1px at 85% 55%, rgba(255,255,255,0.7) 0%,transparent 100%),
+                radial-gradient(1px 1px at 92% 78%, rgba(255,255,255,0.6) 0%,transparent 100%),
+                radial-gradient(1px 1px at 15% 91%, rgba(255,255,255,0.4) 0%,transparent 100%),
+                radial-gradient(2px 2px at 35% 48%, rgba(0,212,255,0.3) 0%,transparent 100%),
+                radial-gradient(2px 2px at 68% 62%, rgba(255,98,0,0.2) 0%,transparent 100%),
+                radial-gradient(1px 1px at 50% 5%,  rgba(255,255,255,0.8) 0%,transparent 100%),
+                radial-gradient(1px 1px at 3% 42%,  rgba(255,255,255,0.5) 0%,transparent 100%),
+                radial-gradient(1px 1px at 97% 30%, rgba(255,255,255,0.7) 0%,transparent 100%);
+        }
+        /* Scanlines */
+        body::after {
+            content:''; position:fixed; inset:0; pointer-events:none; z-index:999;
+            background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px);
+        }
+
+        /* ── LAYOUT ──────────────────────────────── */
+        #app {
+            display: grid;
+            grid-template-rows: var(--titlebar-h) 52px 1fr 26px;
+            grid-template-columns: 210px 1fr;
+            height: 100vh;
+            position: relative; z-index:1;
+        }
+
+        /* ── TITLE BAR (draggable) ────────────────── */
+        #titlebar {
+            grid-column: 1 / -1;
+            background: #03080f;
+            border-bottom: 1px solid rgba(255,98,0,0.25);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            -webkit-app-region: drag;
+            z-index: 100;
+        }
+        .tb-brand {
+            font-family: var(--font-hud);
+            font-size: 11px;
+            letter-spacing: 4px;
+            color: rgba(255,98,0,0.5);
+        }
+        .tb-file {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: 14px;
+        }
+        #tb-journal-name { color: var(--ed-cyan); }
+        .tb-controls {
+            margin-left: auto;
+            display: flex;
+            gap: 0;
+            -webkit-app-region: no-drag;
+        }
+        .tb-btn {
+            width: 46px; height: 36px;
+            border: none; background: transparent;
+            color: var(--text-dim);
+            font-size: 12px;
+            cursor: pointer;
+            display: flex; align-items:center; justify-content:center;
+            transition: all 0.1s;
+        }
+        .tb-btn:hover  { background: rgba(255,255,255,0.07); color: var(--text-primary); }
+        .tb-btn.close:hover { background: #c0392b; color: #fff; }
+
+        /* ── TOPBAR ──────────────────────────────── */
+        #topbar {
+            grid-column: 1 / -1;
+            background: linear-gradient(180deg, #0c1e30 0%, var(--bg-panel) 100%);
+            border-bottom: 1px solid var(--border-o);
+            display: flex; align-items:center;
+            padding: 0 18px; gap: 18px; z-index:20;
+            box-shadow: 0 2px 24px rgba(255,98,0,0.15);
+        }
+        .logo { font-family:var(--font-hud); font-size:20px; font-weight:900; letter-spacing:4px; color:var(--ed-orange); text-shadow:0 0 12px var(--ed-orange), 0 0 24px rgba(255,98,0,0.3); white-space:nowrap; }
+        .logo em { color:var(--ed-cyan); font-style:normal; }
+        .topbar-div { width:1px; height:28px; background:var(--border-o); flex-shrink:0; }
+        .hud-stat { display:flex; flex-direction:column; gap:1px; }
+        .hud-stat-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; }
+        .hud-val { font-family:var(--font-mono); font-size:14px; color:var(--ed-cyan); text-shadow:0 0 8px rgba(0,212,255,0.6); background:transparent; border:none; outline:none; cursor:text; width:170px; user-select:text; }
+        .hud-val:focus { border-bottom:1px solid var(--ed-cyan); }
+        .topbar-right { margin-left:auto; display:flex; align-items:center; gap:14px; }
+        #clock { font-family:var(--font-mono); font-size:12px; color:var(--ed-orange); letter-spacing:1px; text-shadow:0 0 8px rgba(255,98,0,0.4); }
+
+        /* ── SIDEBAR ─────────────────────────────── */
+        #sidebar {
+            background: linear-gradient(180deg, var(--bg-panel) 0%, #030b12 100%);
+            border-right: 1px solid var(--border-o);
+            display: flex; flex-direction:column;
+            z-index:10; overflow:hidden;
+        }
+        #hologram-wrap {
+            width:160px; height:160px;
+            margin: 14px auto 4px;
+            position:relative;
+        }
+        #hologram-wrap::after {
+            content:''; position:absolute; bottom:-4px; left:50%;
+            transform:translateX(-50%);
+            width:120px; height:12px;
+            background:radial-gradient(ellipse, rgba(0,212,255,0.35) 0%, transparent 70%);
+            border-radius:50%;
+        }
+        .nav-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:3px; padding:10px 18px 4px; text-transform:uppercase; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:10px 18px; cursor:pointer; font-family:var(--font-body); font-size:15px; font-weight:600; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; transition:all 0.15s; border-left:2px solid transparent; }
+        .nav-item:hover { color:var(--text-primary); background:rgba(255,98,0,0.04); }
+        .nav-item.active { color:var(--ed-orange); border-left-color:var(--ed-orange); background:rgba(255,98,0,0.07); text-shadow:0 0 8px rgba(255,98,0,0.4); }
+        .nav-icon { font-size:14px; width:18px; text-align:center; flex-shrink:0; }
+        .nav-badge { margin-left:auto; background:var(--ed-orange); color:#000; font-family:var(--font-mono); font-size:10px; font-weight:bold; padding:1px 5px; border-radius:2px; min-width:18px; text-align:center; }
+        .live-dot { display:inline-block; width:5px; height:5px; background:#00FF88; border-radius:50%; margin-left:auto; animation:blink 1.4s ease-in-out infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+        /* ── MAIN ────────────────────────────────── */
+        #main { overflow-y:auto; padding:20px 22px; z-index:5; position:relative; }
+        #main::-webkit-scrollbar { width:3px; }
+        #main::-webkit-scrollbar-track { background:transparent; }
+        #main::-webkit-scrollbar-thumb { background:var(--border-o); border-radius:2px; }
+        .view { display:none; }
+        .view.active { display:block; }
+
+        /* ── PANELS ──────────────────────────────── */
+        .panel { background:rgba(5,14,24,0.88); border:1px solid var(--border-o); padding:16px; margin-bottom:16px; position:relative; clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%); }
+        .panel::before { content:''; position:absolute; top:0; right:0; width:12px; height:12px; background:var(--ed-orange); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .panel-title { font-family:var(--font-hud); font-size:12px; color:var(--ed-orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border-o); }
+
+        /* ── DASHBOARD ───────────────────────────── */
+        .dash-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+        .stat-card { background:rgba(5,14,24,0.88); border:1px solid var(--border-c); padding:16px; text-align:center; position:relative; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%); transition:border-color 0.2s; }
+        .stat-card:hover { border-color:var(--ed-cyan); }
+        .stat-card::before { content:''; position:absolute; top:0; right:0; width:8px; height:8px; background:var(--ed-cyan); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .stat-num { font-family:var(--font-hud); font-size:38px; font-weight:700; color:var(--ed-orange); text-shadow:0 0 18px rgba(255,98,0,0.7); line-height:1; }
+        .stat-lbl { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-top:5px; }
+        .dash-two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+        /* ── VIEW HEADER ─────────────────────────── */
+        .view-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
+        .view-title { font-family:var(--font-hud); font-size:18px; color:var(--ed-orange); letter-spacing:4px; text-transform:uppercase; text-shadow:0 0 14px rgba(255,98,0,0.4); }
+        .view-sub { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-top:3px; }
+
+        /* ── BUTTONS ─────────────────────────────── */
+        .btn { font-family:var(--font-hud); font-size:11px; letter-spacing:2px; text-transform:uppercase; padding:8px 14px; border:1px solid var(--ed-orange); background:transparent; color:var(--ed-orange); cursor:pointer; clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%); transition:all 0.15s; white-space:nowrap; }
+        .btn:hover { background:rgba(255,98,0,0.12); box-shadow:0 0 14px rgba(255,98,0,0.25); }
+        .btn-c { border-color:var(--ed-cyan); color:var(--ed-cyan); }
+        .btn-c:hover { background:rgba(0,212,255,0.1); box-shadow:0 0 14px rgba(0,212,255,0.25); }
+        .btn-d { border-color:#FF4040; color:#FF4040; }
+        .btn-d:hover { background:rgba(255,64,64,0.1); }
+        .btn-g { border-color:#00FF88; color:#00FF88; }
+        .btn-g:hover { background:rgba(0,255,136,0.1); }
+        .btn-sm { font-size:10px; padding:6px 12px; }
+        .btn-row { display:flex; gap:8px; flex-wrap:wrap; }
+
+        /* ── FORMS ───────────────────────────────── */
+        .form-group { margin-bottom:12px; }
+        .form-lbl { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; display:block; margin-bottom:4px; }
+        .form-input, .form-ta, .form-sel { width:100%; background:rgba(0,0,0,0.45); border:1px solid var(--border-c); color:var(--text-primary); font-family:var(--font-body); font-size:16px; padding:9px 12px; outline:none; transition:border-color 0.15s; }
+        .form-input:focus, .form-ta:focus { border-color:var(--ed-cyan); box-shadow:0 0 8px rgba(0,212,255,0.15); }
+        .form-ta { resize:vertical; min-height:80px; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .form-row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+
+        /* ── LOG ENTRIES ─────────────────────────── */
+        .log-entry { border:1px solid rgba(255,98,0,0.22); padding:14px; margin-bottom:10px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%); position:relative; transition:border-color 0.15s; }
+        .log-entry:hover { border-color:rgba(255,98,0,0.5); }
+        .log-entry::before { content:''; position:absolute; top:0; right:0; width:10px; height:10px; background:rgba(255,98,0,0.45); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .log-entry-hdr { display:flex; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap; }
+        .log-entry-title { font-family:var(--font-hud); font-size:14px; color:var(--ed-orange); }
+        .log-entry-sys { font-family:var(--font-mono); font-size:12px; color:var(--ed-cyan); margin-left:auto; white-space:nowrap; }
+        .log-entry-date { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:6px; }
+        .log-entry-body { font-family:var(--font-body); font-size:16px; color:var(--text-primary); line-height:1.6; opacity:0.85; user-select:text; }
+        .tag-row { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
+        .tag { font-family:var(--font-mono); font-size:10px; padding:2px 6px; border:1px solid var(--border-c); color:var(--ed-cyan); letter-spacing:1px; }
+        .entry-acts { display:flex; gap:6px; margin-top:10px; }
+
+        /* ── BOOKMARKS ───────────────────────────── */
+        .bm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+        .bm-card { border:1px solid var(--border-c); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; }
+        .bm-card:hover { border-color:var(--ed-cyan); box-shadow:0 0 16px rgba(0,212,255,0.12); }
+        .bm-sys { font-family:var(--font-hud); font-size:14px; color:var(--ed-cyan); margin-bottom:3px; text-shadow:0 0 8px rgba(0,212,255,0.35); }
+        .bm-type { font-family:var(--font-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+        .bm-notes { font-size:14px; color:var(--text-dim); line-height:1.5; user-select:text; }
+        .bm-coords { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:7px; }
+
+        /* ── JOURNAL FEED ────────────────────────── */
+        .j-event { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid rgba(0,212,255,0.07); align-items:flex-start; }
+        .j-time { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); white-space:nowrap; padding-top:3px; min-width:160px; }
+        .j-type { font-family:var(--font-mono); font-size:11px; padding:2px 6px; white-space:nowrap; }
+        .ev-jump  { background:rgba(255,98,0,0.18); color:var(--ed-orange); }
+        .ev-scan  { background:rgba(0,212,255,0.18); color:var(--ed-cyan); }
+        .ev-dock  { background:rgba(0,255,136,0.15); color:#00FF88; }
+        .ev-other { background:rgba(74,106,138,0.2);  color:var(--text-dim); }
+        .j-text   { font-size:14px; color:var(--text-primary); flex:1; user-select:text; }
+
+        /* ── SEARCH ──────────────────────────────── */
+        .search-row { display:flex; gap:10px; margin-bottom:16px; }
+        .search-in { flex:1; background:rgba(0,0,0,0.4); border:1px solid var(--border-c); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; padding:9px 14px; outline:none; user-select:text; }
+        .search-in:focus { border-color:var(--ed-cyan); }
+        .search-in::placeholder { color:var(--text-dim); }
+
+        /* ── STATUS BAR ──────────────────────────── */
+        #statusbar { grid-column:1/-1; background:var(--bg-panel); border-top:1px solid var(--border-o); display:flex; align-items:center; padding:0 16px; gap:16px; z-index:20; }
+        .sb-item { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); letter-spacing:1px; white-space:nowrap; }
+        .sb-item span { color:var(--ed-cyan); }
+        .ok   { color:#00FF88 !important; }
+        .warn { color:var(--ed-orange) !important; }
+
+        /* ── MODALS ──────────────────────────────── */
+        .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:200; align-items:center; justify-content:center; }
+        .modal-bg.open { display:flex; }
+        .modal { background:var(--bg-panel); border:1px solid var(--ed-orange); padding:24px; width:580px; max-height:82vh; overflow-y:auto; position:relative; clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%); box-shadow:0 0 50px rgba(255,98,0,0.25); }
+        .modal::before { content:''; position:absolute; top:0; right:0; width:16px; height:16px; background:var(--ed-orange); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .modal.modal-c { border-color:var(--ed-cyan); box-shadow:0 0 50px rgba(0,212,255,0.2); }
+        .modal.modal-c::before { background:var(--ed-cyan); }
+        .modal-title { font-family:var(--font-hud); font-size:15px; color:var(--ed-orange); letter-spacing:3px; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border-o); }
+        .modal-c .modal-title { color:var(--ed-cyan); border-bottom-color:var(--border-c); }
+        .modal-acts { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; }
+
+        /* ── EMPTY STATE ─────────────────────────── */
+        .empty { text-align:center; padding:50px 20px; }
+        .empty-icon { font-size:42px; opacity:0.15; margin-bottom:12px; }
+        .empty-txt { font-family:var(--font-mono); font-size:12px; color:var(--text-dim); letter-spacing:2px; }
+
+        /* ── RECENT ROWS ─────────────────────────── */
+        .recent-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid rgba(0,212,255,0.07); font-family:var(--font-mono); font-size:12px; color:var(--text-dim); }
+        .recent-row .sys { color:var(--ed-cyan); }
+        .recent-row .rttl { color:var(--text-primary); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        /* ── VISITED ROWS ────────────────────────── */
+        .vis-row { display:flex; align-items:center; gap:14px; padding:9px 14px; margin-bottom:6px; border:1px solid rgba(0,212,255,0.15); background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%); }
+        .vis-row:hover { border-color:rgba(0,212,255,0.4); }
+        .vis-sys { font-family:var(--font-hud); font-size:14px; color:var(--ed-cyan); }
+
+        /* ── SCAN LINE ───────────────────────────── */
+        @keyframes scan { 0%{top:var(--titlebar-h)} 100%{top:100%} }
+        .scan-line { position:fixed; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(0,212,255,0.12),transparent); animation:scan 8s linear infinite; pointer-events:none; z-index:998; }
+
+        /* ── CORNER DECO ─────────────────────────── */
+        .corner-deco { position:fixed; width:40px; height:40px; pointer-events:none; z-index:50; }
+        .corner-deco.tl { top:calc(var(--titlebar-h) + 52px); left:210px; border-top:1px solid var(--ed-orange); border-left:1px solid var(--ed-orange); }
+        .corner-deco.br { bottom:26px; right:0; border-bottom:1px solid var(--ed-orange); border-right:1px solid var(--ed-orange); }
+
+        /* ── LOADING OVERLAY ─────────────────────── */
+        #loading-overlay {
+            position: fixed; inset: 0; z-index: 9000;
+            background: rgba(2,6,9,0.92);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 18px;
+            transition: opacity 0.4s;
+        }
+        #loading-overlay.hide { opacity: 0; pointer-events: none; }
+        .ld-title { font-family: var(--font-hud); font-size: 16px; color: var(--ed-orange); letter-spacing: 4px; }
+        .ld-file  { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); letter-spacing: 1px; max-width: 500px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ld-bar-wrap { width: 360px; height: 4px; background: rgba(0,212,255,0.12); position: relative; }
+        .ld-bar { height: 4px; background: var(--ed-cyan); width: 0%; transition: width 0.2s; box-shadow: 0 0 10px rgba(0,212,255,0.6); }
+        .ld-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 2px; }
+
+
+        /* ── PERFORMANCE ─────────────────────────── */
+        #main            { contain: strict; }
+        #j-feed          { contain: content; }
+        #log-list        { contain: content; }
+        #bm-grid         { contain: content; }
+        #vis-list        { contain: content; }
+        .log-entry       { contain: layout style; }
+        .bm-card         { contain: layout style; }
+        .j-event         { contain: layout style; }
+        .hologram-canvas { will-change: transform; }
+
+        /* Toast notification */
+        #toast { position:fixed; bottom:40px; right:20px; font-family:var(--font-mono); font-size:12px; padding:8px 16px; border:1px solid var(--ed-orange); background:var(--bg-panel); color:var(--ed-orange); z-index:9999; opacity:0; transition:opacity 0.3s; pointer-events:none; letter-spacing:1px; }
+        #toast.show { opacity:1; }
+
+        /* Sync server address box */
+        .sync-addr { font-family:var(--font-mono); font-size:13px; color:var(--ed-cyan); background:rgba(0,212,255,0.07); border:1px solid var(--border-c); padding:10px 14px; letter-spacing:1px; user-select:text; margin-bottom:12px; word-break:break-all; }
+        .sync-dot  { display:inline-block; width:8px; height:8px; border-radius:50%; background:#00FF88; margin-right:8px; box-shadow:0 0 6px rgba(0,255,136,0.7); animation:blink 2s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+<div class="scan-line"></div>
+<div class="corner-deco tl"></div>
+<div class="corner-deco br"></div>
+<div id="toast"></div>
+
+<!-- ── LOADING OVERLAY ─────────────────────────────────────────────────────── -->
+<div id="loading-overlay">
+    <div class="ld-title">INITIALISING CMDRSYS</div>
+    <div class="ld-bar-wrap"><div class="ld-bar" id="ld-bar"></div></div>
+    <div class="ld-file"  id="ld-file">Scanning journal directory...</div>
+    <div class="ld-count" id="ld-count"></div>
+</div>
+
+<div id="app">
+
+<!-- ── TITLE BAR ───────────────────────────────────────────────────────────── -->
+<div id="titlebar">
+    <span class="tb-brand">CMDRSYS v1.0</span>
+    <span class="tb-file">JOURNAL: <span id="tb-journal-name">NO FILE LOADED</span></span>
+    <div class="tb-controls">
+        <button class="tb-btn" onclick="window.api.minimize()" title="Minimise">─</button>
+        <button class="tb-btn" onclick="window.api.maximize()" title="Maximise/Restore">⬜</button>
+        <button class="tb-btn close" onclick="window.api.close()" title="Close">✕</button>
+    </div>
+</div>
+
+<!-- ── TOP BAR ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+    <div class="logo">CMDR<em>SYS</em></div>
+    <div class="topbar-div"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">Commander</span>
+        <input type="text" class="hud-val" id="inp-cmdr" value="UNKNOWN" title="Click to edit">
+    </div>
+    <div class="topbar-div"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">Current System</span>
+        <span class="hud-val" id="top-sys">SOL</span>
+    </div>
+    <div class="topbar-div"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">Vessel</span>
+        <input type="text" class="hud-val" id="inp-ship" value="UNKNOWN VESSEL" title="Click to edit">
+    </div>
+    <div class="topbar-right">
+        <div id="clock"></div>
+    </div>
+</div>
+
+<!-- ── SIDEBAR ───────────────────────────────────────────────────────────────── -->
+<div id="sidebar">
+    <div id="hologram-wrap">
+        <canvas id="hologram-canvas" width="160" height="160"></canvas>
+    </div>
+    <div class="nav-label">Navigation</div>
+    <div class="nav-item active" data-view="dashboard">
+        <span class="nav-icon">◈</span> Dashboard
+    </div>
+    <div class="nav-item" data-view="logs">
+        <span class="nav-icon">◉</span> Cmdr's Log
+        <span class="nav-badge" id="badge-logs">0</span>
+    </div>
+    <div class="nav-item" data-view="bookmarks">
+        <span class="nav-icon">◎</span> Bookmarks
+        <span class="nav-badge" id="badge-bm">0</span>
+    </div>
+    <div class="nav-label" style="margin-top:6px">Data Feeds</div>
+    <div class="nav-item" data-view="journal">
+        <span class="nav-icon">▸</span> Live Journal
+        <span class="live-dot" id="live-dot" style="opacity:0.2"></span>
+    </div>
+    <div class="nav-item" data-view="visited">
+        <span class="nav-icon">◇</span> Systems Visited
+    </div>
+    <div class="nav-label" style="margin-top:6px">Data</div>
+    <div class="nav-item" data-view="settings">
+        <span class="nav-icon">⚙</span> Settings
+    </div>
+</div>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+    <!-- DASHBOARD -->
+    <div class="view active" id="view-dashboard">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">System Overview</div>
+                <div class="view-sub">All Systems Nominal — SQLite Database Active</div>
+            </div>
+        </div>
+        <div class="dash-stats">
+            <div class="stat-card"><div class="stat-num" id="stat-logs">0</div><div class="stat-lbl">Log Entries</div></div>
+            <div class="stat-card"><div class="stat-num" id="stat-bm">0</div><div class="stat-lbl">Bookmarks</div></div>
+            <div class="stat-card"><div class="stat-num" id="stat-vis">0</div><div class="stat-lbl">Systems Visited</div></div>
+        </div>
+        <div class="dash-two">
+            <div class="panel"><div class="panel-title">Recent Log Entries</div><div id="dash-logs"></div></div>
+            <div class="panel"><div class="panel-title">Recent Systems</div><div id="dash-sys"></div></div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">System Status</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);line-height:2.2">
+                <div>CORE SYSTEMS: <span class="ok">NOMINAL</span></div>
+                <div>DATABASE: <span class="ok">SQLITE — LOCAL</span></div>
+                <div>JOURNAL FEED: <span id="feed-status" style="color:var(--text-dim)">INACTIVE</span></div>
+                <div>CMDRSYS: <span style="color:var(--ed-cyan)">v1.0.0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMMANDER'S LOG -->
+    <div class="view" id="view-logs">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Commander's Log</div>
+                <div class="view-sub">Personal mission log — stored in SQLite</div>
+            </div>
+            <button class="btn" onclick="openLogModal()">+ New Entry</button>
+        </div>
+        <div class="search-row">
+            <input type="text" class="search-in" id="log-search" placeholder="SEARCH LOG ENTRIES..." oninput="debouncedRenderLogs()">
+        </div>
+        <div id="log-list"></div>
+    </div>
+
+    <!-- BOOKMARKS -->
+    <div class="view" id="view-bookmarks">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">System Bookmarks</div>
+                <div class="view-sub">Points of interest across the galaxy</div>
+            </div>
+            <button class="btn btn-c" onclick="openBmModal()">+ Bookmark System</button>
+        </div>
+        <div class="search-row">
+            <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
+        </div>
+        <div id="bm-grid" class="bm-grid"></div>
+    </div>
+
+    <!-- LIVE JOURNAL -->
+    <div class="view" id="view-journal">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Live Journal Feed</div>
+                <div class="view-sub">Live file watcher — auto-updates as you play</div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-g" onclick="openJournal()">▶ Open Journal File</button>
+                <button class="btn btn-d btn-sm" onclick="stopJournal()">■ Stop Watch</button>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">How To Use</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);line-height:1.9">
+                <div>1. Journal location (Windows): <span style="color:var(--ed-cyan)">%USERPROFILE%\Saved Games\Frontier Developments\Elite Dangerous\</span></div>
+                <div>2. Select the latest <span style="color:var(--ed-orange)">Journal.*.log</span> file</div>
+                <div>3. CMDRSYS will parse all existing events then watch for new ones live</div>
+                <div>4. CMDR name, ship, and current system are auto-detected</div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">Events <span id="j-status" style="color:var(--text-dim);font-weight:normal;font-size:9px">(no file loaded)</span></div>
+            <div id="j-feed">
+                <div class="empty"><div class="empty-icon">▸</div><div class="empty-txt">Awaiting journal file</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISITED SYSTEMS -->
+    <div class="view" id="view-visited">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Visited Systems</div>
+                <div class="view-sub">Tracked automatically from journal data</div>
+            </div>
+            <button class="btn btn-sm btn-d" onclick="clearVisited()">Clear All</button>
+        </div>
+        <div class="search-row">
+            <input type="text" class="search-in" id="vis-search" placeholder="SEARCH VISITED SYSTEMS..." oninput="debouncedRenderVisited()">
+        </div>
+        <div id="vis-list"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="view-settings">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Settings & Data</div>
+                <div class="view-sub">Configuration, export and import</div>
+            </div>
+        </div>
+        <div class="dash-two">
+            <div class="panel">
+                <div class="panel-title">Commander Profile</div>
+                <div class="form-group"><label class="form-lbl">Commander Name</label><input type="text" class="form-input" id="set-cmdr"></div>
+                <div class="form-group"><label class="form-lbl">Ship Name / Type</label><input type="text" class="form-input" id="set-ship"></div>
+                <button class="btn btn-sm" onclick="saveProfile()">Save Profile</button>
+            </div>
+            <div class="panel">
+                <div class="panel-title">Backup & Restore</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                    Data is stored in a SQLite database in your Electron userData directory. Use export to back up or move to another machine.
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-g btn-sm" onclick="exportData()">⬇ Export JSON</button>
+                    <button class="btn btn-c btn-sm" onclick="importData()">⬆ Import JSON</button>
+                </div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">Database Info</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);line-height:2.2">
+                <div>ENGINE: <span style="color:var(--ed-cyan)">BETTER-SQLITE3</span></div>
+                <div>LOGS: <span id="db-logs">0</span> records</div>
+                <div>BOOKMARKS: <span id="db-bm">0</span> records</div>
+                <div>VISITED SYSTEMS: <span id="db-vis">0</span> records</div>
+                <div>JOURNAL EVENTS: <span id="db-jev">0</span> records</div>
+            </div>
+        </div>
+
+        <!-- SYNC SERVER PANEL -->
+        <div class="panel">
+            <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                CMDRSYS runs a local sync server so your Android app can auto-sync bookmarks and log entries over WiFi.
+                Both devices must be on the same network. Enter the address below in the Android app's Settings › Sync tab.
+            </div>
+            <div id="sync-status-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">
+                <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(255,98,0,0.4)"></span>
+                <span id="sync-status-txt">Starting sync server...</span>
+            </div>
+            <div id="sync-addr-box" class="sync-addr" style="display:none">
+                <span id="sync-addr-url"></span>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+                <label class="form-lbl">Optional Security Token</label>
+                <div style="display:flex;gap:8px">
+                    <input type="text" class="form-input" id="sync-token-in" placeholder="Leave empty for no auth" style="flex:1">
+                    <button class="btn btn-c btn-sm" onclick="saveSyncToken()">Save Token</button>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:4px">
+                    Set the same token in the Android app to prevent unauthorised access.
+                </div>
+            </div>
+            <div style="margin-top:8px" id="sync-last-row" style="display:none">
+                <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Last sync push received: </span>
+                <span id="sync-last-ts" style="font-family:var(--font-mono);font-size:9px;color:var(--ed-cyan)">—</span>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /main -->
+
+<!-- ── STATUS BAR ──────────────────────────────────────────────────────────── -->
+<div id="statusbar">
+    <div class="sb-item">CMDRSYS <span>v1.0</span></div>
+    <div class="sb-item">|</div>
+    <div class="sb-item">DB: <span class="ok">SQLITE</span></div>
+    <div class="sb-item">|</div>
+    <div class="sb-item">SYSTEM: <span id="sb-sys">—</span></div>
+    <div class="sb-item">|</div>
+    <div class="sb-item">EVENTS: <span id="sb-ev">0</span></div>
+    <div class="sb-item" style="margin-left:auto;font-size:8px">Data stored in Electron userData • Use Export/Import to backup</div>
+</div>
+
+</div><!-- /app -->
+
+<!-- ══ LOG MODAL ═══════════════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="log-modal">
+<div class="modal">
+    <div class="modal-title" id="log-modal-ttl">New Log Entry</div>
+    <input type="hidden" id="log-eid">
+    <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Title</label><input type="text" class="form-input" id="log-ttl" placeholder="Entry title..."></div>
+        <div class="form-group"><label class="form-lbl">System</label><input type="text" class="form-input" id="log-sys" placeholder="Star system..."></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Body / Location</label><input type="text" class="form-input" id="log-body" placeholder="Planet, station, body..."></div>
+    <div class="form-group"><label class="form-lbl">Log Entry</label><textarea class="form-ta" id="log-content" rows="6" placeholder="Write your log entry..."></textarea></div>
+    <div class="form-group"><label class="form-lbl">Tags (comma separated)</label><input type="text" class="form-input" id="log-tags" placeholder="exploration, combat, discovery..."></div>
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeLogModal()">Cancel</button>
+        <button class="btn btn-sm" onclick="saveLog()">Save Entry</button>
+    </div>
+</div>
+</div>
+
+<!-- ══ BOOKMARK MODAL ══════════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="bm-modal">
+<div class="modal modal-c">
+    <div class="modal-title" id="bm-modal-ttl">Bookmark System</div>
+    <input type="hidden" id="bm-eid">
+    <div class="form-row">
+        <div class="form-group"><label class="form-lbl">System Name</label><input type="text" class="form-input" id="bm-sys" placeholder="e.g. Beagle Point"></div>
+        <div class="form-group">
+            <label class="form-lbl">Type</label>
+            <select class="form-input form-sel" id="bm-type">
+                <option value="POI">Point of Interest</option>
+                <option value="EXPLORATION">Exploration Target</option>
+                <option value="TRADE">Trade Hub</option>
+                <option value="COMBAT">Combat Zone</option>
+                <option value="MINING">Mining Site</option>
+                <option value="HOME">Home System</option>
+                <option value="CARRIER">Carrier Port</option>
+                <option value="OTHER">Other</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-row3">
+        <div class="form-group"><label class="form-lbl">Coord X</label><input type="number" class="form-input" id="bm-x" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><label class="form-lbl">Coord Y</label><input type="number" class="form-input" id="bm-y" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><label class="form-lbl">Coord Z</label><input type="number" class="form-input" id="bm-z" placeholder="0.00" step="0.01"></div>
+    </div>
+    <div class="form-group"><label class="form-lbl">Notes</label><textarea class="form-ta" id="bm-notes" rows="4" placeholder="Interesting features, resources..."></textarea></div>
+    <div class="form-group"><label class="form-lbl">Tags (comma separated)</label><input type="text" class="form-input" id="bm-tags" placeholder="nebula, earth-like, neutron..."></div>
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeBmModal()">Cancel</button>
+        <button class="btn btn-c btn-sm" onclick="saveBm()">Save Bookmark</button>
+    </div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// ED DATE SYSTEM
+// ══════════════════════════════════════════════════════════════════
+const ED_OFFSET = 1286;
+const ED_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function edDate(ts) {
+    const d = ts ? new Date(ts) : new Date();
+    const D = String(d.getUTCDate()).padStart(2,'0');
+    const M = ED_MON[d.getUTCMonth()];
+    const Y = d.getUTCFullYear() + ED_OFFSET;
+    const h = String(d.getUTCHours()).padStart(2,'0');
+    const m = String(d.getUTCMinutes()).padStart(2,'0');
+    const s = String(d.getUTCSeconds()).padStart(2,'0');
+    return `${D} ${M} ${Y} — ${h}:${m}:${s}`;
+}
+function edDateShort(ts) {
+    const d = ts ? new Date(ts) : new Date();
+    return `${String(d.getUTCDate()).padStart(2,'0')} ${ED_MON[d.getUTCMonth()]} ${d.getUTCFullYear()+ED_OFFSET}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════════════════════════
+function tickClock() { document.getElementById('clock').textContent = 'GALACTIC DATE: ' + edDate(); }
+setInterval(tickClock, 1000); tickClock();
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// THREE.JS HOLOGRAPHIC PLANET
+// ══════════════════════════════════════════════════════════════════
+(function() {
+    const canvas   = document.getElementById('hologram-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+    renderer.setSize(160,160); renderer.setClearColor(0,0);
+    const scene  = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50,1,0.1,100);
+    camera.position.z = 3.6;
+
+    const planet = new THREE.Mesh(
+        new THREE.SphereGeometry(1,18,14),
+        new THREE.MeshBasicMaterial({ color:0x00D4FF, wireframe:true, transparent:true, opacity:0.35 })
+    );
+    scene.add(planet);
+    scene.add(new THREE.Mesh(
+        new THREE.SphereGeometry(0.97,8,8),
+        new THREE.MeshBasicMaterial({ color:0x001828, transparent:true, opacity:0.65 })
+    ));
+
+    function mkRing(rx,ry,rz,col,op) {
+        const m = new THREE.Mesh(new THREE.TorusGeometry(1.5,0.006,4,80), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op}));
+        m.rotation.set(rx,ry,rz); scene.add(m); return m;
+    }
+    const r1 = mkRing(Math.PI/2,0,0,0xFF6200,0.7);
+    const r2 = mkRing(Math.PI/3,Math.PI/4,0,0x00D4FF,0.5);
+    const r3 = mkRing(Math.PI/5,Math.PI/2,Math.PI/8,0xFF6200,0.3);
+
+    function mkDot(sz,col) {
+        const d = new THREE.Mesh(new THREE.SphereGeometry(sz,8,8), new THREE.MeshBasicMaterial({color:col}));
+        scene.add(d); return d;
+    }
+    const s1 = mkDot(0.055,0xFFFFFF);
+    const s2 = mkDot(0.04, 0xFF6200);
+
+    [-0.5,0,0.5].forEach(y => {
+        const r = Math.sqrt(1-y*y);
+        const lm = new THREE.Mesh(new THREE.TorusGeometry(r,0.004,4,60), new THREE.MeshBasicMaterial({color:0x00D4FF,transparent:true,opacity:0.15}));
+        lm.rotation.x = Math.PI/2; lm.position.y = y; scene.add(lm);
+    });
+
+    let t = 0;
+    (function animate() {
+        requestAnimationFrame(animate); t += 0.008;
+        planet.rotation.y += 0.003; planet.rotation.x += 0.0008;
+        r1.rotation.z += 0.004; r2.rotation.x += 0.002; r3.rotation.y += 0.005;
+        s1.position.set(Math.cos(t)*1.5, Math.sin(t*0.4)*0.3, Math.sin(t)*1.5);
+        s2.position.set(Math.sin(t*1.3)*1.5, Math.cos(t*0.6)*0.5, Math.cos(t*1.3)*1.5);
+        renderer.render(scene,camera);
+    })();
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// PERFORMANCE HELPERS
+// ══════════════════════════════════════════════════════════════════
+function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+const debouncedRenderLogs       = debounce(() => renderLogs(),       250);
+const debouncedRenderBookmarks  = debounce(() => renderBookmarks(),  250);
+const debouncedRenderVisited    = debounce(() => renderVisited(),    250);
+
+// ══════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+        el.classList.add('active');
+        const v = el.dataset.view;
+        document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+        document.getElementById('view-'+v).classList.add('active');
+        if (v==='logs')      renderLogs();
+        if (v==='bookmarks') renderBookmarks();
+        if (v==='visited')   renderVisited();
+        if (v==='settings')  loadSettings();
+    });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// INIT — load from SQLite via IPC
+// ══════════════════════════════════════════════════════════════════
+let gLogs=[], gBm=[], gVisited=[], gJEvents=[];
+
+// ══════════════════════════════════════════════════════════════════
+// LOADING OVERLAY
+// ══════════════════════════════════════════════════════════════════
+window.api.onJournalProgress(({ file, done, total }) => {
+    const pct = Math.round((done / total) * 100);
+    document.getElementById('ld-bar').style.width   = pct + '%';
+    document.getElementById('ld-file').textContent  = file;
+    document.getElementById('ld-count').textContent = `${done} / ${total} files`;
+});
+
+function hideLoadingOverlay() {
+    const el = document.getElementById('loading-overlay');
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT — renderer signals ready; main process loads journals
+// ══════════════════════════════════════════════════════════════════
+async function initApp() {
+    // Signal main process we're ready — it will load journals and return summary
+    const autoLoad = await window.api.rendererReady();
+
+    // Load persisted data
+    const settings = await window.api.getAllSettings();
+    document.getElementById('inp-cmdr').value      = settings.cmdr   || 'UNKNOWN';
+    document.getElementById('inp-ship').value      = settings.ship   || 'UNKNOWN VESSEL';
+    document.getElementById('top-sys').textContent = settings.system || 'SOL';
+    document.getElementById('sb-sys').textContent  = settings.system || 'SOL';
+
+    gLogs    = await window.api.getLogs();
+    gBm      = await window.api.getBookmarks();
+    gVisited = await window.api.getVisited();
+    gJEvents = await window.api.getJournalEvents();
+
+    if (autoLoad && autoLoad.autoLoaded && autoLoad.ok) {
+        const fname = autoLoad.latestFile || '';
+        document.getElementById('tb-journal-name').textContent = `${autoLoad.fileCount} journal files`;
+        document.getElementById('live-dot').style.opacity      = '1';
+        document.getElementById('feed-status').textContent     = `AUTO — ${autoLoad.fileCount} files · ${autoLoad.count} events`;
+        document.getElementById('feed-status').style.color     = '#00FF88';
+        document.getElementById('j-status').textContent        = `(${autoLoad.fileCount} files · ${autoLoad.count} events · watching ${fname})`;
+        document.getElementById('j-status').style.color        = '#00FF88';
+        renderJFeed();
+        toast(`◈ Loaded ${autoLoad.fileCount} journal file${autoLoad.fileCount !== 1 ? 's' : ''} — ${autoLoad.count} events`);
+    } else {
+        document.getElementById('ld-file').textContent  = 'No journal directory found.';
+        document.getElementById('ld-count').textContent = 'Use the Live Journal tab to select your ED journal folder.';
+        await new Promise(r => setTimeout(r, 1800));
+    }
+
+    hideLoadingOverlay();
+    updateDash();
+    updateBadges();
+}
+
+initApp();
+
+// ══════════════════════════════════════════════════════════════════
+// CMDR / SHIP FIELDS
+// ══════════════════════════════════════════════════════════════════
+document.getElementById('inp-cmdr').addEventListener('change', async e => {
+    const v = e.target.value.toUpperCase() || 'UNKNOWN';
+    e.target.value = v;
+    await window.api.setSetting('cmdr', v);
+});
+document.getElementById('inp-ship').addEventListener('change', async e => {
+    const v = e.target.value.toUpperCase() || 'UNKNOWN VESSEL';
+    e.target.value = v;
+    await window.api.setSetting('ship', v);
+});
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function updateDash() {
+    document.getElementById('stat-logs').textContent = gLogs.length;
+    document.getElementById('stat-bm').textContent   = gBm.length;
+    document.getElementById('stat-vis').textContent  = gVisited.length;
+    document.getElementById('sb-ev').textContent     = gJEvents.length;
+
+    const rl = document.getElementById('dash-logs');
+    const recent = [...gLogs].sort((a,b)=>b.ts-a.ts).slice(0,6);
+    rl.innerHTML = recent.length===0
+        ? `<div class="empty"><div class="empty-icon">◉</div><div class="empty-txt">No entries yet</div></div>`
+        : recent.map(e=>`
+            <div class="recent-row">
+                <span style="color:var(--ed-orange)">◉</span>
+                <span class="sys">${e.system||'?'}</span>
+                <span class="rttl">${e.title}</span>
+            </div>`).join('');
+
+    const rs = document.getElementById('dash-sys');
+    const recentV = [...gVisited].slice(0,6);
+    rs.innerHTML = recentV.length===0
+        ? `<div class="empty"><div class="empty-icon">◇</div><div class="empty-txt">No systems tracked</div></div>`
+        : recentV.map(s=>`
+            <div class="recent-row">
+                <span style="color:var(--ed-cyan)">◇</span>
+                <span class="sys">${s.name}</span>
+                <span style="margin-left:auto">${edDateShort(s.ts)}</span>
+            </div>`).join('');
+}
+
+function updateBadges() {
+    document.getElementById('badge-logs').textContent = gLogs.length;
+    document.getElementById('badge-bm').textContent   = gBm.length;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COMMANDER'S LOG
+// ══════════════════════════════════════════════════════════════════
+function openLogModal(id) {
+    document.getElementById('log-modal-ttl').textContent = id ? 'Edit Log Entry' : 'New Log Entry';
+    document.getElementById('log-eid').value = id || '';
+    if (id) {
+        const e = gLogs.find(l=>l.id===id);
+        document.getElementById('log-ttl').value     = e.title;
+        document.getElementById('log-sys').value     = e.system||'';
+        document.getElementById('log-body').value    = e.body||'';
+        document.getElementById('log-content').value = e.content;
+        document.getElementById('log-tags').value    = (e.tags||[]).join(', ');
+    } else {
+        ['log-ttl','log-body','log-content','log-tags'].forEach(id=>document.getElementById(id).value='');
+        document.getElementById('log-sys').value = document.getElementById('top-sys').textContent;
+    }
+    document.getElementById('log-modal').classList.add('open');
+    setTimeout(()=>document.getElementById('log-ttl').focus(),80);
+}
+function closeLogModal() { document.getElementById('log-modal').classList.remove('open'); }
+
+async function saveLog() {
+    const id      = document.getElementById('log-eid').value;
+    const title   = document.getElementById('log-ttl').value.trim();
+    const content = document.getElementById('log-content').value.trim();
+    if (!title || !content) { toast('⚠ Title and entry content required'); return; }
+    const entry = {
+        id:      id || Date.now().toString(),
+        ts:      id ? (gLogs.find(l=>l.id===id)?.ts || Date.now()) : Date.now(),
+        title,
+        system:  document.getElementById('log-sys').value.trim(),
+        body:    document.getElementById('log-body').value.trim(),
+        content,
+        tags:    document.getElementById('log-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+    };
+    await window.api.saveLog(entry);
+    gLogs = await window.api.getLogs();
+    closeLogModal(); renderLogs(); updateDash(); updateBadges();
+    toast('◉ Log entry saved');
+}
+
+async function deleteLog(id) {
+    if (!confirm('Delete this log entry? This cannot be undone.')) return;
+    await window.api.deleteLog(id);
+    gLogs = await window.api.getLogs();
+    renderLogs(); updateDash(); updateBadges();
+    toast('Entry deleted');
+}
+
+function renderLogs() {
+    const q  = (document.getElementById('log-search')?.value||'').toLowerCase();
+    const fl = gLogs.filter(l=>
+        l.title.toLowerCase().includes(q)||
+        (l.system||'').toLowerCase().includes(q)||
+        l.content.toLowerCase().includes(q)
+    );
+    const c = document.getElementById('log-list');
+    if (fl.length===0) {
+        c.innerHTML = `<div class="empty"><div class="empty-icon">◉</div><div class="empty-txt">${gLogs.length===0?'No log entries yet.':'No entries match your search.'}</div></div>`;
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    fl.forEach(e => {
+        const d = document.createElement('div');
+        d.className = 'log-entry';
+        d.innerHTML =
+            `<div class="log-entry-hdr">
+                <div class="log-entry-title">${e.title}</div>
+                ${e.system?`<div class="log-entry-sys">◇ ${e.system}${e.body?' / '+e.body:''}</div>`:''}
+            </div>
+            <div class="log-entry-date">◈ ${edDate(e.ts)}</div>
+            <div class="log-entry-body">${e.content.replace(/\n/g,'<br>')}</div>
+            ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            <div class="entry-acts">
+                <button class="btn btn-c btn-sm" onclick="openLogModal('${e.id}')">Edit</button>
+                <button class="btn btn-d btn-sm" onclick="deleteLog('${e.id}')">Delete</button>
+            </div>`;
+        frag.appendChild(d);
+    });
+    c.replaceChildren(frag);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOOKMARKS
+// ══════════════════════════════════════════════════════════════════
+const typeCol = {POI:'#FFA500',EXPLORATION:'#00D4FF',TRADE:'#00FF88',COMBAT:'#FF4040',MINING:'#FFD700',HOME:'#FF6200',CARRIER:'#CC88FF',OTHER:'#4A6A8A'};
+
+function openBmModal(id, prefillSys) {
+    document.getElementById('bm-modal-ttl').textContent = id ? 'Edit Bookmark' : 'Bookmark System';
+    document.getElementById('bm-eid').value = id||'';
+    if (id) {
+        const b = gBm.find(x=>x.id===id);
+        document.getElementById('bm-sys').value   = b.system;
+        document.getElementById('bm-type').value  = b.type;
+        document.getElementById('bm-x').value     = b.x??'';
+        document.getElementById('bm-y').value     = b.y??'';
+        document.getElementById('bm-z').value     = b.z??'';
+        document.getElementById('bm-notes').value = b.notes||'';
+        document.getElementById('bm-tags').value  = (b.tags||[]).join(', ');
+    } else {
+        document.getElementById('bm-sys').value   = prefillSys || document.getElementById('top-sys').textContent;
+        document.getElementById('bm-type').value  = 'POI';
+        ['bm-x','bm-y','bm-z','bm-notes','bm-tags'].forEach(id=>document.getElementById(id).value='');
+    }
+    document.getElementById('bm-modal').classList.add('open');
+    setTimeout(()=>document.getElementById('bm-sys').focus(),80);
+}
+function closeBmModal() { document.getElementById('bm-modal').classList.remove('open'); }
+
+async function saveBm() {
+    const id     = document.getElementById('bm-eid').value;
+    const system = document.getElementById('bm-sys').value.trim();
+    if (!system) { toast('⚠ System name required'); return; }
+    const bm = {
+        id:    id||Date.now().toString(), ts:Date.now(), system,
+        type:  document.getElementById('bm-type').value,
+        x:     parseFloat(document.getElementById('bm-x').value)||null,
+        y:     parseFloat(document.getElementById('bm-y').value)||null,
+        z:     parseFloat(document.getElementById('bm-z').value)||null,
+        notes: document.getElementById('bm-notes').value.trim(),
+        tags:  document.getElementById('bm-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+    };
+    await window.api.saveBookmark(bm);
+    gBm = await window.api.getBookmarks();
+    closeBmModal(); renderBookmarks(); updateDash(); updateBadges();
+    toast('◎ Bookmark saved');
+}
+
+async function deleteBm(id) {
+    if (!confirm('Delete this bookmark?')) return;
+    await window.api.deleteBookmark(id);
+    gBm = await window.api.getBookmarks();
+    renderBookmarks(); updateDash(); updateBadges();
+    toast('Bookmark deleted');
+}
+
+function renderBookmarks() {
+    const q  = (document.getElementById('bm-search')?.value||'').toLowerCase();
+    const fl = gBm.filter(b=>b.system.toLowerCase().includes(q)||(b.notes||'').toLowerCase().includes(q)||(b.tags||[]).some(t=>t.toLowerCase().includes(q)));
+    const c  = document.getElementById('bm-grid');
+    if (fl.length===0) {
+        c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">◎</div><div class="empty-txt">${gBm.length===0?'No bookmarks yet.':'No bookmarks match.'}</div></div>`;
+        return;
+    }
+    c.innerHTML = fl.map(b=>`
+        <div class="bm-card">
+            <div class="bm-sys">${b.system}</div>
+            <div class="bm-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type}</div>
+            ${b.notes?`<div class="bm-notes">${b.notes}</div>`:''}
+            ${b.x!==null&&b.y!==null?`<div class="bm-coords">X:${b.x} Y:${b.y}${b.z!==null?' Z:'+b.z:''}</div>`:''}
+            ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>`:''}
+            <div class="entry-acts" style="margin-top:10px">
+                <button class="btn btn-c btn-sm" onclick="openBmModal('${b.id}')">Edit</button>
+                <button class="btn btn-d btn-sm" onclick="deleteBm('${b.id}')">Delete</button>
+            </div>
+        </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISITED SYSTEMS
+// ══════════════════════════════════════════════════════════════════
+async function clearVisited() {
+    if (!confirm('Clear all visited systems? This cannot be undone.')) return;
+    await window.api.clearVisited();
+    gVisited = [];
+    renderVisited(); updateDash();
+    toast('Visited systems cleared');
+}
+
+function renderVisited() {
+    const q  = (document.getElementById('vis-search')?.value||'').toLowerCase();
+    const fl = gVisited.filter(v=>v.name.toLowerCase().includes(q));
+    const c  = document.getElementById('vis-list');
+    if (fl.length===0) {
+        c.innerHTML = `<div class="empty"><div class="empty-icon">◇</div><div class="empty-txt">${gVisited.length===0?'No systems tracked yet.':'No systems match.'}</div></div>`;
+        return;
+    }
+    c.innerHTML = fl.map(v=>`
+        <div class="vis-row">
+            <span style="color:var(--ed-cyan);font-size:16px">◇</span>
+            <span style="font-family:var(--font-hud);font-size:12px;color:var(--ed-cyan)">${v.name}</span>
+            <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-left:auto">${edDate(v.ts)}</span>
+            <button class="btn btn-c btn-sm" onclick="openBmModal(null,'${v.name.replace(/'/g,"\\'")}')">Bookmark</button>
+        </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// JOURNAL
+// ══════════════════════════════════════════════════════════════════
+async function openJournal() {
+    const res = await window.api.openJournal();
+    if (!res.ok) return;
+    gJEvents = await window.api.getJournalEvents();
+    gVisited = await window.api.getVisited();
+    const settings = await window.api.getAllSettings();
+    if (settings.cmdr)   document.getElementById('inp-cmdr').value          = settings.cmdr;
+    if (settings.ship)   document.getElementById('inp-ship').value          = settings.ship;
+    if (settings.system) {
+        document.getElementById('top-sys').textContent = settings.system;
+        document.getElementById('sb-sys').textContent  = settings.system;
+    }
+    document.getElementById('tb-journal-name').textContent = res.file;
+    document.getElementById('live-dot').style.opacity      = '1';
+    document.getElementById('feed-status').textContent     = `ACTIVE — ${res.file} · ${res.count} events`;
+    document.getElementById('feed-status').style.color     = '#00FF88';
+    document.getElementById('j-status').textContent        = `(${res.file} · ${res.count} events)`;
+    document.getElementById('j-status').style.color        = '#00FF88';
+    renderJFeed(); updateDash();
+    toast(`▸ Loaded all journals — ${res.count} events`);
+}
+
+async function stopJournal() {
+    await window.api.stopJournalWatch();
+    document.getElementById('live-dot').style.opacity = '0.2';
+    document.getElementById('feed-status').textContent = 'INACTIVE';
+    document.getElementById('feed-status').style.color = 'var(--text-dim)';
+    toast('■ Journal watcher stopped');
+}
+
+// Live push from main process — throttled to max once per 800ms
+let liveThrottleTimer = null;
+let pendingLiveEvs = [];
+
+window.api.onJournalEvents(async (newEvs) => {
+    pendingLiveEvs.push(...newEvs);
+    if (liveThrottleTimer) return;
+    liveThrottleTimer = setTimeout(async () => {
+        const batch = pendingLiveEvs.splice(0);
+        liveThrottleTimer = null;
+        gJEvents.push(...batch);
+        gVisited = await window.api.getVisited();
+        buildJFeedFiltered();
+        renderJFeedVirtual();
+        updateDash();
+        document.getElementById('sb-ev').textContent = gJEvents.length;
+
+        const lastJump = [...batch].reverse().find(e=>['FSDJump','CarrierJump','Location'].includes(e.event));
+        if (lastJump?.StarSystem) {
+            document.getElementById('top-sys').textContent = lastJump.StarSystem;
+            document.getElementById('sb-sys').textContent  = lastJump.StarSystem;
+            toast(`◇ Jumped to ${lastJump.StarSystem}`);
+        }
+    }, 800);
+});
+
+window.api.onMetaUpdate(meta => {
+    if (meta.cmdr && document.getElementById('inp-cmdr').value === 'UNKNOWN') document.getElementById('inp-cmdr').value = meta.cmdr;
+    if (meta.ship && document.getElementById('inp-ship').value === 'UNKNOWN VESSEL') document.getElementById('inp-ship').value = meta.ship;
+    if (meta.system) { document.getElementById('top-sys').textContent = meta.system; document.getElementById('sb-sys').textContent = meta.system; }
+});
+
+const evCls  = e => ['FSDJump','CarrierJump'].includes(e.event)?'ev-jump':e.event==='Scan'?'ev-scan':['Docked','Undocked'].includes(e.event)?'ev-dock':'ev-other';
+const evDesc = e => {
+    if (e.event==='FSDJump')           return `Jumped to <b style="color:var(--ed-cyan)">${e.StarSystem}</b>`;
+    if (e.event==='CarrierJump')       return `Carrier jumped to <b style="color:var(--ed-cyan)">${e.StarSystem}</b>`;
+    if (e.event==='Scan')              return `Scanned <b style="color:var(--ed-cyan)">${e.BodyName||e.Body||'unknown body'}</b>`;
+    if (e.event==='Docked')            return `Docked at <b>${e.StationName}</b> · ${e.StarSystem}`;
+    if (e.event==='Undocked')          return `Undocked from <b>${e.StationName}</b>`;
+    if (e.event==='Location')          return `Located in <b style="color:var(--ed-cyan)">${e.StarSystem}</b>`;
+    if (e.event==='LoadGame')          return `Session started · <b>${e.Ship_Localised||e.Ship||'?'}</b>`;
+    if (e.event==='Died')              return `<span style="color:#FF4040">⚠ SHIP DESTROYED</span>`;
+    if (e.event==='Resurrection')      return `<span style="color:#FFA500">⚠ Rebought · respawned</span>`;
+    if (e.event==='MissionAccepted')   return `Mission accepted: ${e.LocalisedName||e.Name||'?'}`;
+    if (e.event==='MissionCompleted')  return `Mission completed: ${e.LocalisedName||e.Name||'?'}`;
+    if (e.event==='SupercruiseExit')   return `Dropped out in ${e.StarSystem}`;
+    if (e.event==='Screenshot')        return `Screenshot captured`;
+    return e.event;
+};
+
+// ── Virtual list for journal feed ──────────────────────────────────────────
+const JFEED_ROW_H    = 38;   // px per row estimate
+const JFEED_OVERSCAN = 8;    // rows to render above/below viewport
+let   jFeedFiltered  = [];
+let   jFeedScroller  = null;
+let   jFeedAF        = null;
+
+function buildJFeedFiltered() {
+    const INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
+        'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
+        'Resurrection','SupercruiseExit','LoadGame']);
+    jFeedFiltered = gJEvents.filter(e => INTERESTING.has(e.event)).reverse();
+}
+
+function renderJFeedVirtual() {
+    const c = document.getElementById('j-feed');
+    if (jFeedFiltered.length === 0) {
+        c.innerHTML = '<div class="empty"><div class="empty-icon">▸</div><div class="empty-txt">No notable events found</div></div>';
+        return;
+    }
+
+    // Set up scroller sentinel once
+    if (!jFeedScroller) {
+        c.style.position = 'relative';
+        c.style.overflowY = 'auto';
+        c.style.maxHeight = '600px';
+        c.addEventListener('scroll', () => {
+            if (jFeedAF) cancelAnimationFrame(jFeedAF);
+            jFeedAF = requestAnimationFrame(renderJFeedVirtual);
+        });
+        jFeedScroller = c;
+    }
+
+    const total     = jFeedFiltered.length;
+    const totalH    = total * JFEED_ROW_H;
+    const scrollTop = c.scrollTop;
+    const viewH     = c.clientHeight || 600;
+
+    const firstVis  = Math.max(0, Math.floor(scrollTop / JFEED_ROW_H) - JFEED_OVERSCAN);
+    const lastVis   = Math.min(total - 1, Math.ceil((scrollTop + viewH) / JFEED_ROW_H) + JFEED_OVERSCAN);
+
+    const frag      = document.createDocumentFragment();
+
+    // Top spacer
+    if (firstVis > 0) {
+        const top = document.createElement('div');
+        top.style.height = (firstVis * JFEED_ROW_H) + 'px';
+        frag.appendChild(top);
+    }
+
+    for (let i = firstVis; i <= lastVis; i++) {
+        const e   = jFeedFiltered[i];
+        const row = document.createElement('div');
+        row.className = 'j-event';
+        row.innerHTML = `<div class="j-time">${edDate(e.timestamp)}</div>` +
+                        `<div class="j-type ${evCls(e)}">${e.event}</div>` +
+                        `<div class="j-text">${evDesc(e)}</div>`;
+        frag.appendChild(row);
+    }
+
+    // Bottom spacer
+    const renderedBottom = (lastVis + 1) * JFEED_ROW_H;
+    if (renderedBottom < totalH) {
+        const bot = document.createElement('div');
+        bot.style.height = (totalH - renderedBottom) + 'px';
+        frag.appendChild(bot);
+    }
+
+    c.replaceChildren(frag);
+}
+
+function renderJFeed() {
+    buildJFeedFiltered();
+    jFeedScroller = null; // force scroll listener re-attach on full rebuild
+    renderJFeedVirtual();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SETTINGS VIEW
+// ══════════════════════════════════════════════════════════════════
+async function loadSettings() {
+    const s = await window.api.getAllSettings();
+    document.getElementById('set-cmdr').value = s.cmdr||'';
+    document.getElementById('set-ship').value = s.ship||'';
+    document.getElementById('db-logs').textContent = gLogs.length;
+    document.getElementById('db-bm').textContent   = gBm.length;
+    document.getElementById('db-vis').textContent  = gVisited.length;
+    document.getElementById('db-jev').textContent  = gJEvents.length;
+    // Populate sync info
+    loadSyncInfo();
+}
+
+// ── Sync server UI ────────────────────────────────────────────────────────────
+async function loadSyncInfo() {
+    const info = await window.api.getSyncInfo();
+    const dot  = document.getElementById('sync-dot');
+    const txt  = document.getElementById('sync-status-txt');
+    const box  = document.getElementById('sync-addr-box');
+    const url  = document.getElementById('sync-addr-url');
+    const tok  = document.getElementById('sync-token-in');
+
+    if (info.running) {
+        dot.style.background = '#00FF88';
+        dot.style.boxShadow  = '0 0 6px rgba(0,255,136,0.7)';
+        txt.textContent      = 'Sync server active';
+        txt.style.color      = '#00FF88';
+        box.style.display    = 'block';
+        url.textContent      = `http://${info.ip}:${info.port}`;
+    } else {
+        dot.style.background = 'rgba(255,98,0,0.4)';
+        dot.style.boxShadow  = 'none';
+        txt.textContent      = 'Sync server not running';
+        txt.style.color      = 'var(--ed-orange)';
+        box.style.display    = 'none';
+    }
+    tok.value = info.token || '';
+}
+
+async function saveSyncToken() {
+    const token = document.getElementById('sync-token-in').value.trim();
+    await window.api.setSyncToken(token);
+    toast(token ? '◈ Sync token saved' : '◈ Sync token cleared (no auth)');
+}
+
+// Listen for sync server coming online (happens after initDB)
+window.api.onSyncServerStarted(info => {
+    const dot = document.getElementById('sync-dot');
+    const txt = document.getElementById('sync-status-txt');
+    const box = document.getElementById('sync-addr-box');
+    const url = document.getElementById('sync-addr-url');
+    if (dot) {
+        dot.style.background = '#00FF88';
+        dot.style.boxShadow  = '0 0 6px rgba(0,255,136,0.7)';
+        txt.textContent      = 'Sync server active';
+        txt.style.color      = '#00FF88';
+        box.style.display    = 'block';
+        url.textContent      = `http://${info.ip}:${info.port}`;
+    }
+});
+
+// Listen for Android push — refresh data without full reload
+window.api.onSyncDataUpdated(async () => {
+    gLogs    = await window.api.getLogs();
+    gBm      = await window.api.getBookmarks();
+    gVisited = await window.api.getVisited();
+    updateDash(); updateBadges();
+    document.getElementById('sync-last-ts').textContent = new Date().toLocaleTimeString();
+    document.getElementById('sync-last-row').style.display = 'block';
+    toast('↔ Sync data received from Android');
+});
+
+async function saveProfile() {
+    const cmdr = document.getElementById('set-cmdr').value.trim().toUpperCase();
+    const ship = document.getElementById('set-ship').value.trim().toUpperCase();
+    await window.api.setSetting('cmdr', cmdr);
+    await window.api.setSetting('ship', ship);
+    document.getElementById('inp-cmdr').value = cmdr;
+    document.getElementById('inp-ship').value = ship;
+    toast('◈ Profile saved');
+}
+
+async function exportData() {
+    const res = await window.api.exportJSON();
+    if (res.ok) toast('⬇ Exported: ' + res.path);
+    else toast('⚠ Export cancelled');
+}
+
+async function importData() {
+    const res = await window.api.importJSON();
+    if (res.ok) {
+        gLogs    = await window.api.getLogs();
+        gBm      = await window.api.getBookmarks();
+        gVisited = await window.api.getVisited();
+        updateDash(); updateBadges(); loadSettings();
+        toast('⬆ Data imported successfully');
+    } else if (res.error) {
+        toast('⚠ Import failed: ' + res.error);
+    }
+}
+
+// Modal overlay close
+document.getElementById('log-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogModal(); });
+document.getElementById('bm-modal').addEventListener('click',  e => { if(e.target===e.currentTarget) closeBmModal(); });
+</script>
+</body>
+</html>

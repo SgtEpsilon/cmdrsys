@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Allow plain HTTP to any destination.
+        The sync server runs on plain HTTP on the local LAN (port 45678).
+        Android's <domain> tag matches hostnames only — it cannot match IP
+        address ranges — so we permit cleartext globally here.
+        usesCleartextTraffic="true" is already set in AndroidManifest.xml,
+        but this file was overriding it with cleartextTrafficPermitted="false"
+        on the base-config, which blocked all HTTP fetches to LAN IPs.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

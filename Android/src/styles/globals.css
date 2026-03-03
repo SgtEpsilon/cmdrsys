@@ -1,0 +1,105 @@
+:root {
+  --bg-void:        #020609;
+  --bg-panel:       #050e18;
+  --ed-orange:      #FF6200;
+  --ed-orange-dim:  rgba(255, 98, 0, 0.3);
+  --ed-cyan:        #00D4FF;
+  --ed-cyan-dim:    rgba(0, 212, 255, 0.25);
+  --text-primary:   #D8EEFF;
+  --text-dim:       #4A6A8A;
+  --border-o:       rgba(255, 98, 0, 0.45);
+  --border-c:       rgba(0, 212, 255, 0.3);
+  --font-hud:       'Orbitron', monospace;
+  --font-body:      'Exo 2', sans-serif;
+  --font-mono:      'JetBrains Mono', monospace;
+  --safe-top:       env(safe-area-inset-top, 0px);
+  --safe-bottom:    env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Starfield */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1px 1px at 8%  15%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(1px 1px at 23% 72%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 41% 33%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 57% 88%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 73% 20%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 55%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 92% 78%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 15% 91%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35% 48%, rgba(0,212,255,0.3) 0%, transparent 100%),
+    radial-gradient(2px 2px at 68% 62%, rgba(255,98,0,0.2)  0%, transparent 100%),
+    radial-gradient(1px 1px at 50% 5%,  rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 3%  42%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 97% 30%, rgba(255,255,255,0.7) 0%, transparent 100%);
+}
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-o); border-radius: 2px; }
+
+/* Scan line animation */
+@keyframes scan {
+  0%   { top: 60px; }
+  100% { top: 100%; }
+}
+.scan-line {
+  position: fixed;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.12), transparent);
+  animation: scan 8s linear infinite;
+  pointer-events: none;
+  z-index: 998;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+/* Inputs selectable */
+input, textarea, select {
+  user-select: text;
+  -webkit-user-select: text;
+}

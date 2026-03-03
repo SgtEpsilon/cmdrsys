@@ -40,6 +40,15 @@ contextBridge.exposeInMainWorld('api', {
     onJournalEvents:   (cb) => ipcRenderer.on('journal:newEvents',  (_, evs) => cb(evs)),
     onMetaUpdate:      (cb) => ipcRenderer.on('journal:metaUpdate', (_, meta) => cb(meta)),
 
+    // Sync server
+    getSyncInfo:  ()      => ipcRenderer.invoke('sync:getInfo'),
+    setSyncIP:    (ip)    => ipcRenderer.invoke('sync:setIP', ip),
+    setSyncToken: (token) => ipcRenderer.invoke('sync:setToken', token),
+    restartSync:  ()      => ipcRenderer.invoke('sync:restart'),
+    onSyncServerStarted: (cb) => ipcRenderer.on('sync:serverStarted', (_, info) => cb(info)),
+    onSyncDataUpdated:   (cb) => ipcRenderer.on('sync:dataUpdated',   ()         => cb()),
+    onSyncIpChanged:     (cb) => ipcRenderer.on('sync:ipChanged',     (_, info)  => cb(info)),
+
     // Export / Import
     exportJSON: () => ipcRenderer.invoke('export:json'),
     importJSON: () => ipcRenderer.invoke('import:json'),

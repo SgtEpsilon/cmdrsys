@@ -1,3 +1,55 @@
-node_modules
+# ── Node / npm ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Electron build output ─────────────────────────────────────────
+Electron/dist/
+Electron/out/
+
+# ── Android build output ──────────────────────────────────────────
+Android/android/app/build/
+Android/android/build/
+Android/android/.gradle/
+Android/android/captures/
+Android/android/local.properties
+
+# ── Capacitor ─────────────────────────────────────────────────────
+# Vite build output that Capacitor copies into the Android assets
+Android/dist/
+
+# ── Android Studio ────────────────────────────────────────────────
+*.iml
+.idea/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+*.idea
+
+# ── Keystore / signing — NEVER commit these ───────────────────────
+*.jks
+*.keystore
+*.pk8
+*.pepk
+release/
+Android/android/app/release/
+
+# ── OS files ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Electron user data (SQLite DB lives here at runtime) ──────────
+# userData is outside the repo but just in case
+*.db
+*.db-journal
+
+# ── Vite / build cache ────────────────────────────────────────────
+Android/.vite/
+.vite/
 *.zip
-dist/*

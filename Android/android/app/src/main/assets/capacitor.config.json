@@ -1,0 +1,21 @@
+{
+	"appId": "com.cmdrsys.app",
+	"appName": "CMDRSYS",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "http"
+	},
+	"android": {
+		"allowMixedContent": true
+	},
+	"plugins": {
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#020609"
+		},
+		"Keyboard": {
+			"resize": "body",
+			"resizeOnFullScreen": true
+		}
+	}
+}
