@@ -1,7 +1,4 @@
 
-<!DOCTYPE html>
-<html>
-<body>
 <div align="center">
 
 <img src="https://img.shields.io/badge/Elite%20Dangerous-F4A800?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTEyIDJMMyAyMGgxOEwxMiAyeiIvPjwvc3ZnPg==&logoColor=black" alt="Elite Dangerous"/>
@@ -133,5 +130,3 @@ This project is open source. See the repository for details.
 *Made with ❤️ by [SgtEpsilon](https://github.com/SgtEpsilon)*
 
 </div>
-</body>
-</html>
