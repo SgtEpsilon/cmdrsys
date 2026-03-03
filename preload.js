@@ -1,0 +1,46 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+    // App lifecycle
+    rendererReady: () => ipcRenderer.invoke('renderer:ready'),
+
+    // Window controls
+    minimize: ()  => ipcRenderer.send('window:minimize'),
+    maximize: ()  => ipcRenderer.send('window:maximize'),
+    close:    ()  => ipcRenderer.send('window:close'),
+
+    // Settings
+    getSetting:  (key, def)  => ipcRenderer.invoke('settings:get', key, def),
+    setSetting:  (key, val)  => ipcRenderer.invoke('settings:set', key, val),
+    getAllSettings: ()        => ipcRenderer.invoke('settings:getAll'),
+
+    // Logs
+    getLogs:    ()      => ipcRenderer.invoke('logs:getAll'),
+    saveLog:    (entry) => ipcRenderer.invoke('logs:save', entry),
+    deleteLog:  (id)    => ipcRenderer.invoke('logs:delete', id),
+
+    // Bookmarks
+    getBookmarks:   ()   => ipcRenderer.invoke('bookmarks:getAll'),
+    saveBookmark:   (bm) => ipcRenderer.invoke('bookmarks:save', bm),
+    deleteBookmark: (id) => ipcRenderer.invoke('bookmarks:delete', id),
+
+    // Visited systems
+    getVisited:   ()          => ipcRenderer.invoke('visited:getAll'),
+    addVisited:   (name, ts)  => ipcRenderer.invoke('visited:add', name, ts),
+    clearVisited: ()          => ipcRenderer.invoke('visited:clear'),
+
+    // Journal
+    openJournal:    ()  => ipcRenderer.invoke('journal:open'),
+    getJournalEvents: () => ipcRenderer.invoke('journal:getEvents'),
+    clearJournalEvents: () => ipcRenderer.invoke('journal:clearEvents'),
+    stopJournalWatch:  () => ipcRenderer.invoke('journal:stopWatch'),
+
+    // Live journal push events from main
+    onJournalProgress: (cb) => ipcRenderer.on('journal:progress',   (_, p)   => cb(p)),
+    onJournalEvents:   (cb) => ipcRenderer.on('journal:newEvents',  (_, evs) => cb(evs)),
+    onMetaUpdate:      (cb) => ipcRenderer.on('journal:metaUpdate', (_, meta) => cb(meta)),
+
+    // Export / Import
+    exportJSON: () => ipcRenderer.invoke('export:json'),
+    importJSON: () => ipcRenderer.invoke('import:json'),
+});
