@@ -1,22 +1,35 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Btn, Panel, FormInput } from './UI.jsx';
+import { getSyncConfig, setSyncConfig, pingDesktop } from '../utils/syncService.js';
 
-export default function SettingsView({ settings, updateSettings, logs, bookmarks, visited, exportData, importData, onJournalImport }) {
+export default function SettingsView({
+  settings, updateSettings,
+  logs, bookmarks, visited,
+  exportData, importData, onJournalImport,
+  syncStatus, syncError, lastSyncTime, triggerSync,
+}) {
   const [cmdr, setCmdr] = useState(settings.cmdr || '');
   const [ship, setShip] = useState(settings.ship || '');
   const [msg,  setMsg]  = useState('');
   const fileRef = useRef(null);
   const jsonRef = useRef(null);
 
-  // Keep local state in sync if settings change externally
-  React.useEffect(() => {
+  // Sync config local state
+  const cfg = getSyncConfig();
+  const [syncUrl,   setSyncUrl]   = useState(cfg.url);
+  const [syncToken, setSyncToken] = useState(cfg.token);
+  const [pingState, setPingState] = useState('idle'); // 'idle' | 'pinging' | 'ok' | 'error'
+  const [manualSyncing, setManualSyncing] = useState(false);
+
+  // Keep profile fields in sync if settings change externally
+  useEffect(() => {
     setCmdr(settings.cmdr || '');
     setShip(settings.ship || '');
   }, [settings.cmdr, settings.ship]);
 
   function notify(text) {
     setMsg(text);
-    setTimeout(() => setMsg(''), 3000);
+    setTimeout(() => setMsg(''), 3500);
   }
 
   async function saveProfile() {
@@ -38,7 +51,6 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
     e.target.value = '';
   }
 
-  // Journal import — parse FSD jumps out of an ED .log file
   async function handleJournalImport(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -62,7 +74,6 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
       } catch {}
     }
 
-    // Deduplicate by system name, keep latest
     const seen = new Map();
     for (const s of systems) {
       if (!seen.has(s.name) || seen.get(s.name).ts < s.ts) seen.set(s.name, s);
@@ -73,6 +84,58 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
     notify(`▸ Imported ${deduped.length} systems${lastCmdr ? ` · CMDR ${lastCmdr}` : ''}`);
     e.target.value = '';
   }
+
+  // ── Sync handlers ────────────────────────────────────────────────────────────
+
+  function saveSyncConfig() {
+    setSyncConfig({ url: syncUrl, token: syncToken });
+    notify('◈ Sync settings saved');
+  }
+
+  async function handlePing() {
+    setSyncConfig({ url: syncUrl, token: syncToken });
+    setPingState('pinging');
+    try {
+      await pingDesktop();
+      setPingState('ok');
+      notify('◈ Desktop reachable — connection good');
+    } catch (e) {
+      setPingState('error');
+      notify('⚠ Cannot reach desktop: ' + e.message);
+    }
+    setTimeout(() => setPingState('idle'), 4000);
+  }
+
+  async function handleManualSync() {
+    setSyncConfig({ url: syncUrl, token: syncToken });
+    setManualSyncing(true);
+    try {
+      const result = await triggerSync();
+      notify(`↔ Synced — ${result.bookmarks} bookmarks · ${result.logs} logs`);
+    } catch (e) {
+      notify('⚠ Sync failed: ' + e.message);
+    } finally {
+      setManualSyncing(false);
+    }
+  }
+
+  // ── Status helpers ───────────────────────────────────────────────────────────
+
+  const statusColor = {
+    idle:    'var(--text-dim)',
+    syncing: 'var(--ed-orange)',
+    ok:      '#00FF88',
+    error:   '#FF4040',
+  };
+  const statusText = {
+    idle:    syncUrl ? 'Idle — will sync every 30 s' : 'Configure URL below to enable auto-sync',
+    syncing: 'Syncing…',
+    ok:      lastSyncTime ? `Last sync: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Synced',
+    error:   `Error: ${syncError}`,
+  };
+
+  const pingColor  = { idle: 'var(--ed-cyan)', pinging: 'var(--ed-orange)', ok: '#00FF88', error: '#FF4040' };
+  const pingLabel  = { idle: 'Test Connection', pinging: 'Testing…', ok: '✓ Connected', error: '✗ Failed' };
 
   return (
     <div>
@@ -89,14 +152,72 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
         }}>{msg}</div>
       )}
 
-      {/* Commander Profile */}
+      {/* ── Commander Profile ──────────────────────────────────────────── */}
       <Panel title="Commander Profile">
-        <FormInput label="Commander Name" value={cmdr} onChange={e => setCmdr(e.target.value)} placeholder="CMDR NAME" />
+        <FormInput label="Commander Name"   value={cmdr} onChange={e => setCmdr(e.target.value)} placeholder="CMDR NAME" />
         <FormInput label="Ship Name / Type" value={ship} onChange={e => setShip(e.target.value)} placeholder="VESSEL NAME" />
         <Btn onClick={saveProfile} small>Save Profile</Btn>
       </Panel>
 
-      {/* Journal Import */}
+      {/* ── Auto-Sync ─────────────────────────────────────────────────── */}
+      <Panel title="Desktop Auto-Sync">
+
+        {/* Status row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: statusColor[syncStatus] || 'var(--text-dim)',
+            boxShadow: syncStatus === 'ok' ? '0 0 6px rgba(0,255,136,0.7)' : 'none',
+            flexShrink: 0,
+          }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: statusColor[syncStatus] }}>
+            {statusText[syncStatus]}
+          </span>
+        </div>
+
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.9, marginBottom: '12px' }}>
+          <div>Enter the address shown in the Electron app's Settings › Mobile Sync panel.</div>
+          <div>Both devices must be on the same WiFi network.</div>
+          <div style={{ marginTop: '4px', color: 'var(--ed-cyan)' }}>Syncs: bookmarks · logs</div>
+        </div>
+
+        <FormInput
+          label="Desktop Sync URL"
+          value={syncUrl}
+          onChange={e => setSyncUrl(e.target.value)}
+          placeholder="http://192.168.1.x:45678"
+        />
+
+        <FormInput
+          label="Security Token (optional)"
+          value={syncToken}
+          onChange={e => setSyncToken(e.target.value)}
+          placeholder="Leave empty if not set on desktop"
+        />
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+          <Btn onClick={saveSyncConfig} small>Save Settings</Btn>
+          <Btn
+            onClick={handlePing}
+            variant="cyan"
+            small
+            disabled={!syncUrl || pingState === 'pinging'}
+            style={{ color: pingColor[pingState], borderColor: pingColor[pingState] }}
+          >
+            {pingLabel[pingState]}
+          </Btn>
+          <Btn
+            onClick={handleManualSync}
+            variant="green"
+            small
+            disabled={!syncUrl || manualSyncing || syncStatus === 'syncing'}
+          >
+            {manualSyncing ? 'Syncing…' : '↔ Sync Now'}
+          </Btn>
+        </div>
+      </Panel>
+
+      {/* ── Journal Import ────────────────────────────────────────────── */}
       <Panel title="Import Journal File">
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.9, marginBottom: '12px' }}>
           <div>Copy your latest <span style={{ color: 'var(--ed-orange)' }}>Journal.*.log</span> from your PC to your phone,</div>
@@ -113,7 +234,7 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
         <Btn onClick={() => jsonRef.current?.click()} variant="green" small>▶ Import Journal .log File</Btn>
       </Panel>
 
-      {/* Backup & Restore */}
+      {/* ── Backup & Restore ──────────────────────────────────────────── */}
       <Panel title="Backup & Restore">
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.9, marginBottom: '12px' }}>
           Export a full JSON backup of all your logs, bookmarks and visited systems. Import to restore on any device.
@@ -131,7 +252,7 @@ export default function SettingsView({ settings, updateSettings, logs, bookmarks
         />
       </Panel>
 
-      {/* DB Info */}
+      {/* ── DB Info ───────────────────────────────────────────────────── */}
       <Panel title="Database Info">
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 2.2 }}>
           <div>ENGINE: <span style={{ color: 'var(--ed-cyan)' }}>LOCAL STORAGE (CAPACITOR PREFERENCES)</span></div>

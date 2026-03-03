@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
+const http = require('http');
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 const USER_DATA = app.getPath('userData');
@@ -243,6 +244,160 @@ function processLiveChunk(text) {
     }
 }
 
+// ─── Sync Server ──────────────────────────────────────────────────────────────
+// Runs a local HTTP server on the LAN so the Android app can pull/push data.
+// Default port: 45678. Token is optional but recommended for security.
+
+const SYNC_PORT = 45678;
+let syncServer  = null;
+
+function getLocalIP() {
+    const nets = os.networkInterfaces();
+    for (const ifaces of Object.values(nets)) {
+        for (const iface of ifaces) {
+            if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+        }
+    }
+    return 'localhost';
+}
+
+function startSyncServer() {
+    if (syncServer) return; // already running
+
+    syncServer = http.createServer((req, res) => {
+        // CORS — needed so the Android WebView can reach us
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Sync-Token');
+        res.setHeader('Content-Type', 'application/json');
+
+        if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+        // Optional auth token
+        const token = getSetting('syncToken', '');
+        if (token && req.headers['x-sync-token'] !== token) {
+            res.writeHead(401);
+            res.end(JSON.stringify({ error: 'Unauthorized — wrong sync token' }));
+            return;
+        }
+
+        // ── GET /sync — Android pulls all syncable data ──────────────────────
+        if (req.method === 'GET' && req.url === '/sync') {
+            try {
+                const payload = {
+                    bookmarks: queryAll('SELECT * FROM bookmarks ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    logs:      queryAll('SELECT * FROM logs ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    settings: {
+                        cmdr:   getSetting('cmdr'),
+                        ship:   getSetting('ship'),
+                        system: getSetting('system'),
+                    },
+                    ts: Date.now(),
+                };
+                res.writeHead(200);
+                res.end(JSON.stringify(payload));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── POST /sync — Android pushes its local changes ────────────────────
+        } else if (req.method === 'POST' && req.url === '/sync') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    let changed = false;
+
+                    // Merge bookmarks — last ts wins per id
+                    if (Array.isArray(data.bookmarks)) {
+                        data.bookmarks.forEach(b => {
+                            const existing = queryGet('SELECT ts FROM bookmarks WHERE id = ?', [b.id]);
+                            if (!existing || existing.ts < b.ts) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO bookmarks
+                                     (id,ts,system,type,x,y,z,notes,tags)
+                                     VALUES (?,?,?,?,?,?,?,?,?)`,
+                                    [b.id, b.ts, b.system, b.type || 'POI',
+                                     b.x ?? null, b.y ?? null, b.z ?? null,
+                                     b.notes || '', JSON.stringify(b.tags || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    // Merge logs — last ts wins per id
+                    if (Array.isArray(data.logs)) {
+                        data.logs.forEach(l => {
+                            const existing = queryGet('SELECT ts FROM logs WHERE id = ?', [l.id]);
+                            if (!existing || existing.ts < l.ts) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO logs
+                                     (id,ts,title,system,body,content,tags)
+                                     VALUES (?,?,?,?,?,?,?)`,
+                                    [l.id, l.ts, l.title, l.system || '',
+                                     l.body || '', l.content, JSON.stringify(l.tags || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    if (changed) {
+                        saveDB();
+                        // Notify renderer to refresh its in-memory data
+                        if (win && !win.isDestroyed()) {
+                            win.webContents.send('sync:dataUpdated');
+                        }
+                    }
+
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ ok: true, changed }));
+                } catch (e) {
+                    console.error('Sync POST error:', e);
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: e.message }));
+                }
+            });
+
+        // ── GET /ping — health check so Android can test connectivity ─────────
+        } else if (req.method === 'GET' && req.url === '/ping') {
+            res.writeHead(200);
+            res.end(JSON.stringify({ ok: true, app: 'CMDRSYS', ts: Date.now() }));
+
+        } else {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: 'Not found' }));
+        }
+    });
+
+    syncServer.on('error', (e) => {
+        console.error('Sync server error:', e.message);
+    });
+
+    syncServer.listen(SYNC_PORT, '0.0.0.0', () => {
+        const ip = getLocalIP();
+        console.log(`CMDRSYS sync server running at http://${ip}:${SYNC_PORT}`);
+        setSetting('syncServerIP',   ip);
+        setSetting('syncServerPort', String(SYNC_PORT));
+        saveDB();
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('sync:serverStarted', { ip, port: SYNC_PORT });
+        }
+    });
+}
+
+function stopSyncServer() {
+    if (syncServer) {
+        syncServer.close();
+        syncServer = null;
+    }
+}
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 let win;
 function createWindow() {
@@ -266,12 +421,14 @@ function createWindow() {
 // Window opens FIRST, then journals load in response to renderer:ready
 app.whenReady().then(async () => {
     await initDB();
-    createWindow();   // ← opens immediately, no blocking work before this
+    createWindow();
+    startSyncServer();   // ← start sync server alongside the app
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on('window-all-closed', () => {
     if (journalWatcher) journalWatcher.close();
+    stopSyncServer();
     if (process.platform !== 'darwin') app.quit();
 });
 
@@ -281,7 +438,6 @@ ipcMain.on('window:maximize', () => win.isMaximized() ? win.unmaximize() : win.m
 ipcMain.on('window:close',    () => win.close());
 
 // ─── renderer:ready — triggered by renderer on mount ─────────────────────────
-// This is where the journal loading actually happens, safely after the window exists
 ipcMain.handle('renderer:ready', () => {
     const savedDir   = getSetting('journal_dir', '');
     const journalDir = savedDir || getDefaultJournalDir();
@@ -290,8 +446,6 @@ ipcMain.handle('renderer:ready', () => {
         return { autoLoaded: false, reason: 'No journal directory found' };
     }
 
-    // Run synchronously but NOW the window is open so it won't block startup
-    // Progress events are pushed to the renderer during the loop above
     try {
         const result = loadAllJournals(journalDir);
         return { autoLoaded: true, ...result };
@@ -353,7 +507,6 @@ ipcMain.handle('visited:clear', () => {
 });
 
 // ─── Journal Events IPC ───────────────────────────────────────────────────────
-// Events live in memory (memEvents), not SQLite — avoids huge DB growth
 ipcMain.handle('journal:getEvents', () => memEvents);
 ipcMain.handle('journal:clearEvents', () => { memEvents = []; return true; });
 
@@ -380,6 +533,26 @@ ipcMain.handle('journal:open', async () => {
 
 ipcMain.handle('journal:stopWatch', () => {
     if (journalWatcher) { journalWatcher.close(); journalWatcher = null; }
+    return true;
+});
+
+// ─── Sync IPC ─────────────────────────────────────────────────────────────────
+ipcMain.handle('sync:getInfo', () => {
+    const ip    = getSetting('syncServerIP',   getLocalIP());
+    const port  = getSetting('syncServerPort', String(SYNC_PORT));
+    const token = getSetting('syncToken', '');
+    return { ip, port: Number(port), token, running: !!syncServer };
+});
+
+ipcMain.handle('sync:setToken', (_, token) => {
+    setSetting('syncToken', token);
+    saveDB();
+    return true;
+});
+
+ipcMain.handle('sync:restart', () => {
+    stopSyncServer();
+    startSyncServer();
     return true;
 });
 

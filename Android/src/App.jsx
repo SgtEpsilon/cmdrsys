@@ -167,6 +167,10 @@ export default function App() {
             exportData={store.exportData}
             importData={store.importData}
             onJournalImport={handleJournalImport}
+            syncStatus={store.syncStatus}
+            syncError={store.syncError}
+            lastSyncTime={store.lastSyncTime}
+            triggerSync={store.triggerSync}
           />
         )}
       </main>
