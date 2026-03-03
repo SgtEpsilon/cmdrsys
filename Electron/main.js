@@ -252,6 +252,8 @@ const SYNC_PORT = 45678;
 let syncServer  = null;
 
 function getLocalIP() {
+    const saved = getSetting('syncServerIP', '');
+    if (saved) return saved;
     const nets = os.networkInterfaces();
     for (const ifaces of Object.values(nets)) {
         for (const iface of ifaces) {
@@ -259,6 +261,20 @@ function getLocalIP() {
         }
     }
     return 'localhost';
+}
+
+// Returns all non-loopback IPv4 interfaces so the user can pick the right one
+function getAllNetworkInterfaces() {
+    const nets = os.networkInterfaces();
+    const results = [];
+    for (const [name, ifaces] of Object.entries(nets)) {
+        for (const iface of ifaces) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                results.push({ name, address: iface.address });
+            }
+        }
+    }
+    return results;
 }
 
 function startSyncServer() {
@@ -382,11 +398,16 @@ function startSyncServer() {
     syncServer.listen(SYNC_PORT, '0.0.0.0', () => {
         const ip = getLocalIP();
         console.log(`CMDRSYS sync server running at http://${ip}:${SYNC_PORT}`);
-        setSetting('syncServerIP',   ip);
         setSetting('syncServerPort', String(SYNC_PORT));
+        // Only auto-set IP if user hasn't chosen one yet
+        if (!getSetting('syncServerIP', '')) setSetting('syncServerIP', ip);
         saveDB();
         if (win && !win.isDestroyed()) {
-            win.webContents.send('sync:serverStarted', { ip, port: SYNC_PORT });
+            win.webContents.send('sync:serverStarted', {
+                ip:         getSetting('syncServerIP', ip),
+                port:       SYNC_PORT,
+                interfaces: getAllNetworkInterfaces(),
+            });
         }
     });
 }
@@ -538,10 +559,21 @@ ipcMain.handle('journal:stopWatch', () => {
 
 // ─── Sync IPC ─────────────────────────────────────────────────────────────────
 ipcMain.handle('sync:getInfo', () => {
-    const ip    = getSetting('syncServerIP',   getLocalIP());
-    const port  = getSetting('syncServerPort', String(SYNC_PORT));
-    const token = getSetting('syncToken', '');
-    return { ip, port: Number(port), token, running: !!syncServer };
+    const ip         = getSetting('syncServerIP',   getLocalIP());
+    const port       = getSetting('syncServerPort', String(SYNC_PORT));
+    const token      = getSetting('syncToken', '');
+    const interfaces = getAllNetworkInterfaces();
+    return { ip, port: Number(port), token, running: !!syncServer, interfaces };
+});
+
+ipcMain.handle('sync:setIP', (_, ip) => {
+    setSetting('syncServerIP', ip);
+    saveDB();
+    // Notify renderer immediately so the address box updates
+    if (win && !win.isDestroyed()) {
+        win.webContents.send('sync:ipChanged', { ip, port: SYNC_PORT });
+    }
+    return true;
 });
 
 ipcMain.handle('sync:setToken', (_, token) => {

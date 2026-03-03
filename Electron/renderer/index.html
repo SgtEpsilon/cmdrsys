@@ -549,16 +549,41 @@
             <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
             <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
                 CMDRSYS runs a local sync server so your Android app can auto-sync bookmarks and log entries over WiFi.
-                Both devices must be on the same network. Enter the address below in the Android app's Settings › Sync tab.
+                Both devices must be on the same network. Enter the address shown below into the Android app's Settings › Sync tab.
             </div>
-            <div id="sync-status-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">
-                <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(255,98,0,0.4)"></span>
-                <span id="sync-status-txt">Starting sync server...</span>
+
+            <!-- Status row -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-family:var(--font-mono);font-size:10px">
+                <span id="sync-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(255,98,0,0.4);flex-shrink:0"></span>
+                <span id="sync-status-txt" style="color:var(--text-dim)">Starting sync server...</span>
             </div>
-            <div id="sync-addr-box" class="sync-addr" style="display:none">
-                <span id="sync-addr-url"></span>
+
+            <!-- Network interface picker -->
+            <div class="form-group">
+                <label class="form-lbl">Network Interface — pick the adapter your phone shares</label>
+                <div style="display:flex;gap:8px;align-items:stretch">
+                    <select class="form-input form-sel" id="sync-iface-sel" style="flex:1" onchange="onSyncIfaceChange()">
+                        <option value="">— loading —</option>
+                    </select>
+                    <button class="btn btn-c btn-sm" onclick="refreshSyncInterfaces()" title="Refresh">↺ Refresh</button>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:5px">
+                    Pick a 192.168.x.x address that matches the same network your Android phone is on.
+                </div>
             </div>
-            <div class="form-group" style="margin-top:12px">
+
+            <!-- Address box -->
+            <div class="form-group">
+                <label class="form-lbl">Android Sync URL — paste this into the Android app</label>
+                <div id="sync-addr-box" class="sync-addr" style="display:none;cursor:pointer" onclick="copySyncUrl()" title="Click to copy">
+                    <span id="sync-addr-url"></span>
+                    <span style="margin-left:12px;font-size:10px;color:var(--text-dim)">[click to copy]</span>
+                </div>
+                <div id="sync-addr-none" style="font-family:var(--font-mono);font-size:11px;color:var(--ed-orange)">Waiting for server...</div>
+            </div>
+
+            <!-- Token -->
+            <div class="form-group">
                 <label class="form-lbl">Optional Security Token</label>
                 <div style="display:flex;gap:8px">
                     <input type="text" class="form-input" id="sync-token-in" placeholder="Leave empty for no auth" style="flex:1">
@@ -568,8 +593,9 @@
                     Set the same token in the Android app to prevent unauthorised access.
                 </div>
             </div>
-            <div style="margin-top:8px" id="sync-last-row" style="display:none">
-                <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Last sync push received: </span>
+
+            <div id="sync-last-row" style="display:none;margin-top:4px">
+                <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Last sync received from Android: </span>
                 <span id="sync-last-ts" style="font-family:var(--font-mono);font-size:9px;color:var(--ed-cyan)">—</span>
             </div>
         </div>
@@ -1242,29 +1268,82 @@ async function loadSettings() {
 }
 
 // ── Sync server UI ────────────────────────────────────────────────────────────
-async function loadSyncInfo() {
-    const info = await window.api.getSyncInfo();
-    const dot  = document.getElementById('sync-dot');
-    const txt  = document.getElementById('sync-status-txt');
-    const box  = document.getElementById('sync-addr-box');
-    const url  = document.getElementById('sync-addr-url');
-    const tok  = document.getElementById('sync-token-in');
 
-    if (info.running) {
+function setSyncAddrDisplay(ip, port) {
+    const box  = document.getElementById('sync-addr-box');
+    const none = document.getElementById('sync-addr-none');
+    const url  = document.getElementById('sync-addr-url');
+    if (ip && port) {
+        url.textContent    = `http://${ip}:${port}`;
+        box.style.display  = 'block';
+        if (none) none.style.display = 'none';
+    } else {
+        box.style.display  = 'none';
+        if (none) none.style.display = 'block';
+    }
+}
+
+function setSyncStatusDot(running) {
+    const dot = document.getElementById('sync-dot');
+    const txt = document.getElementById('sync-status-txt');
+    if (!dot) return;
+    if (running) {
         dot.style.background = '#00FF88';
         dot.style.boxShadow  = '0 0 6px rgba(0,255,136,0.7)';
         txt.textContent      = 'Sync server active';
         txt.style.color      = '#00FF88';
-        box.style.display    = 'block';
-        url.textContent      = `http://${info.ip}:${info.port}`;
     } else {
         dot.style.background = 'rgba(255,98,0,0.4)';
         dot.style.boxShadow  = 'none';
         txt.textContent      = 'Sync server not running';
         txt.style.color      = 'var(--ed-orange)';
-        box.style.display    = 'none';
     }
-    tok.value = info.token || '';
+}
+
+function populateIfaceDropdown(interfaces, selectedIP) {
+    const sel = document.getElementById('sync-iface-sel');
+    if (!sel) return;
+    sel.innerHTML = '';
+    if (!interfaces || interfaces.length === 0) {
+        sel.innerHTML = '<option value="">— no interfaces found —</option>';
+        return;
+    }
+    interfaces.forEach(iface => {
+        const opt = document.createElement('option');
+        opt.value       = iface.address;
+        opt.textContent = `${iface.address}  (${iface.name})`;
+        if (iface.address === selectedIP) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadSyncInfo() {
+    const info = await window.api.getSyncInfo();
+    setSyncStatusDot(info.running);
+    setSyncAddrDisplay(info.ip, info.port);
+    populateIfaceDropdown(info.interfaces, info.ip);
+    document.getElementById('sync-token-in').value = info.token || '';
+}
+
+async function refreshSyncInterfaces() {
+    const info = await window.api.getSyncInfo();
+    populateIfaceDropdown(info.interfaces, info.ip);
+    toast('↺ Interface list refreshed');
+}
+
+async function onSyncIfaceChange() {
+    const sel = document.getElementById('sync-iface-sel');
+    const ip  = sel.value;
+    if (!ip) return;
+    await window.api.setSyncIP(ip);
+    setSyncAddrDisplay(ip, 45678);
+    toast(`◈ Sync address set to ${ip}`);
+}
+
+function copySyncUrl() {
+    const url = document.getElementById('sync-addr-url').textContent;
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => toast('◈ URL copied to clipboard'));
 }
 
 async function saveSyncToken() {
@@ -1275,18 +1354,16 @@ async function saveSyncToken() {
 
 // Listen for sync server coming online (happens after initDB)
 window.api.onSyncServerStarted(info => {
-    const dot = document.getElementById('sync-dot');
-    const txt = document.getElementById('sync-status-txt');
-    const box = document.getElementById('sync-addr-box');
-    const url = document.getElementById('sync-addr-url');
-    if (dot) {
-        dot.style.background = '#00FF88';
-        dot.style.boxShadow  = '0 0 6px rgba(0,255,136,0.7)';
-        txt.textContent      = 'Sync server active';
-        txt.style.color      = '#00FF88';
-        box.style.display    = 'block';
-        url.textContent      = `http://${info.ip}:${info.port}`;
-    }
+    setSyncStatusDot(true);
+    setSyncAddrDisplay(info.ip, info.port);
+    populateIfaceDropdown(info.interfaces, info.ip);
+});
+
+// Listen for IP change confirmation from main
+window.api.onSyncIpChanged(info => {
+    setSyncAddrDisplay(info.ip, info.port);
+    const sel = document.getElementById('sync-iface-sel');
+    if (sel) sel.value = info.ip;
 });
 
 // Listen for Android push — refresh data without full reload

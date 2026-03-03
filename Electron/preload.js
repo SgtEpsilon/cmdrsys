@@ -42,10 +42,12 @@ contextBridge.exposeInMainWorld('api', {
 
     // Sync server
     getSyncInfo:  ()      => ipcRenderer.invoke('sync:getInfo'),
+    setSyncIP:    (ip)    => ipcRenderer.invoke('sync:setIP', ip),
     setSyncToken: (token) => ipcRenderer.invoke('sync:setToken', token),
     restartSync:  ()      => ipcRenderer.invoke('sync:restart'),
     onSyncServerStarted: (cb) => ipcRenderer.on('sync:serverStarted', (_, info) => cb(info)),
     onSyncDataUpdated:   (cb) => ipcRenderer.on('sync:dataUpdated',   ()         => cb()),
+    onSyncIpChanged:     (cb) => ipcRenderer.on('sync:ipChanged',     (_, info)  => cb(info)),
 
     // Export / Import
     exportJSON: () => ipcRenderer.invoke('export:json'),

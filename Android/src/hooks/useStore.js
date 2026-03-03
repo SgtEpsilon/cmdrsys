@@ -7,7 +7,7 @@ import {
 } from '../utils/storage.js';
 import { getSyncConfig, fullSync } from '../utils/syncService.js';
 
-const AUTO_SYNC_INTERVAL = 30_000; // 30 seconds
+const AUTO_SYNC_INTERVAL = 30_000;
 
 export function useStore() {
   const [logs,      setLogsState]     = useState([]);
@@ -30,12 +30,18 @@ export function useStore() {
   // Load all data on mount
   useEffect(() => {
     (async () => {
-      const [l, b, v, s] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings()]);
-      setLogsState(l);
-      setBookmarksState(b);
-      setVisitedState(v);
-      setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
-      setReady(true);
+      try {
+        const [l, b, v, s] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings()]);
+        setLogsState(l);
+        setBookmarksState(b);
+        setVisitedState(v);
+        setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
+      } catch (e) {
+        console.error('useStore: load error', e);
+      } finally {
+        // Always mark ready — even on storage error, show empty app rather than black screen
+        setReady(true);
+      }
     })();
   }, []);
 
@@ -44,8 +50,9 @@ export function useStore() {
     if (!ready) return;
 
     async function runSync() {
-      const { url } = getSyncConfig();
-      if (!url) return; // no sync URL — skip silently
+      // Read config fresh each tick — user may have just saved it in Settings
+      const { url } = await getSyncConfig();
+      if (!url) return; // no URL configured — skip silently
 
       setSyncStatus('syncing');
       setSyncError('');
@@ -81,16 +88,16 @@ export function useStore() {
       }
     }
 
-    // Run once immediately after data loads, then on interval
-    runSync();
+    // Delay first sync 3s so UI is settled, then repeat every 30s
+    const firstRun = setTimeout(runSync, 3_000);
     const id = setInterval(runSync, AUTO_SYNC_INTERVAL);
-    return () => clearInterval(id);
+    return () => { clearTimeout(firstRun); clearInterval(id); };
   }, [ready]); // only re-run if ready changes
 
   // ── Manual sync trigger ──────────────────────────────────────────────────────
   const triggerSync = useCallback(async () => {
-    const { url } = getSyncConfig();
-    if (!url) throw new Error('No sync URL configured. Add it in Settings › Sync.');
+    const { url } = await getSyncConfig();
+    if (!url) throw new Error('No sync URL configured. Add it in Settings › Desktop Sync.');
 
     setSyncStatus('syncing');
     setSyncError('');

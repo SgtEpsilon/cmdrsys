@@ -14,12 +14,19 @@ export default function SettingsView({
   const fileRef = useRef(null);
   const jsonRef = useRef(null);
 
-  // Sync config local state
-  const cfg = getSyncConfig();
-  const [syncUrl,   setSyncUrl]   = useState(cfg.url);
-  const [syncToken, setSyncToken] = useState(cfg.token);
+  // Sync config local state — loaded async on mount
+  const [syncUrl,   setSyncUrl]   = useState('');
+  const [syncToken, setSyncToken] = useState('');
   const [pingState, setPingState] = useState('idle'); // 'idle' | 'pinging' | 'ok' | 'error'
   const [manualSyncing, setManualSyncing] = useState(false);
+
+  // Load sync config from storage on mount (getSyncConfig is now async)
+  useEffect(() => {
+    getSyncConfig().then(({ url, token }) => {
+      setSyncUrl(url || '');
+      setSyncToken(token || '');
+    }).catch(() => {});
+  }, []);
 
   // Keep profile fields in sync if settings change externally
   useEffect(() => {
