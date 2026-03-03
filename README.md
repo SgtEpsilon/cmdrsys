@@ -102,6 +102,13 @@ cmdrsys/
 ├── 📄 android build and run.txt   # Android build guide
 └── 📄 README.md
 ```
+---
+<img width="1280" height="820" alt="image" src="https://github.com/user-attachments/assets/68bd225b-e3bf-4eb3-b962-1fd0bad87b00" />
+<img width="1280" height="820" alt="image" src="https://github.com/user-attachments/assets/76179743-5007-462f-b8bf-d3b53f288afd" />
+<img width="1280" height="820" alt="image" src="https://github.com/user-attachments/assets/d7f690a2-823a-42ea-b0e9-494646b5f90a" />
+<img width="1280" height="820" alt="image" src="https://github.com/user-attachments/assets/3da97e72-7dd1-4b3f-b4ef-ce11f074d029" />
+<img width="1280" height="820" alt="image" src="https://github.com/user-attachments/assets/02daaa5d-32dd-4883-9566-2fb84adfd402" />
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/2345daa4-b729-4da2-89dd-f46cdcd43acc" />
 
 ---
 
