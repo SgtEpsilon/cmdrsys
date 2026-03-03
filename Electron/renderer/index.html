@@ -321,6 +321,28 @@
         /* Sync server address box */
         .sync-addr { font-family:var(--font-mono); font-size:13px; color:var(--ed-cyan); background:rgba(0,212,255,0.07); border:1px solid var(--border-c); padding:10px 14px; letter-spacing:1px; user-select:text; margin-bottom:12px; word-break:break-all; }
         .sync-dot  { display:inline-block; width:8px; height:8px; border-radius:50%; background:#00FF88; margin-right:8px; box-shadow:0 0 6px rgba(0,255,136,0.7); animation:blink 2s ease-in-out infinite; }
+
+        /* ── ENTRY VIEW MODAL ─────────────────────── */
+        .modal-view { background:var(--bg-panel); border:1px solid var(--ed-orange); padding:28px 30px; width:680px; max-height:88vh; overflow-y:auto; position:relative; clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%); box-shadow:0 0 60px rgba(255,98,0,0.22); }
+        .modal-view::before { content:''; position:absolute; top:0; right:0; width:16px; height:16px; background:var(--ed-orange); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .modal-view.modal-view-c { border-color:var(--ed-cyan); box-shadow:0 0 60px rgba(0,212,255,0.2); }
+        .modal-view.modal-view-c::before { background:var(--ed-cyan); }
+        .mv-sys-row { display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+        .mv-sysname { font-family:var(--font-hud); font-size:22px; color:var(--ed-cyan); text-shadow:0 0 14px rgba(0,212,255,0.5); letter-spacing:2px; user-select:text; }
+        .mv-sysname-o { color:var(--ed-orange); text-shadow:0 0 14px rgba(255,98,0,0.5); }
+        .mv-copy-btn { font-family:var(--font-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; padding:5px 11px; border:1px solid var(--ed-cyan); background:transparent; color:var(--ed-cyan); cursor:pointer; clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,0 100%); transition:all 0.15s; white-space:nowrap; }
+        .mv-copy-btn:hover { background:rgba(0,212,255,0.12); box-shadow:0 0 10px rgba(0,212,255,0.3); }
+        .mv-copy-btn.copied { border-color:#00FF88; color:#00FF88; }
+        .mv-meta { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); letter-spacing:1px; margin-bottom:18px; }
+        .mv-divider { border:none; border-top:1px solid var(--border-o); margin:16px 0; }
+        .mv-divider-c { border-top-color:var(--border-c); }
+        .mv-label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:3px; text-transform:uppercase; margin-bottom:6px; }
+        .mv-content { font-family:var(--font-body); font-size:17px; color:var(--text-primary); line-height:1.75; user-select:text; white-space:pre-wrap; }
+        .mv-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px; }
+        .mv-detail-item { background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.12); padding:10px 14px; }
+        .mv-detail-val { font-family:var(--font-mono); font-size:13px; color:var(--ed-cyan); margin-top:3px; user-select:text; }
+        .mv-notes-block { background:rgba(255,98,0,0.04); border-left:2px solid var(--ed-orange); padding:12px 16px; margin-top:14px; }
+        .mv-notes-block-c { background:rgba(0,212,255,0.04); border-left-color:var(--ed-cyan); }
     </style>
 </head>
 <body>
@@ -675,6 +697,51 @@
 </div>
 </div>
 
+<!-- ══ LOG ENTRY VIEW MODAL ═══════════════════════════════════════════════════ -->
+<div class="modal-bg" id="log-view-modal">
+<div class="modal-view">
+    <div class="modal-title" id="lv-title" style="color:var(--ed-orange);border-bottom-color:var(--border-o)">Log Entry</div>
+    <div class="mv-sys-row">
+        <div class="mv-sysname mv-sysname-o" id="lv-system">—</div>
+        <button class="mv-copy-btn" id="lv-copy-btn" onclick="copyLvSystem()" title="Copy system name to clipboard">⧉ Copy System</button>
+    </div>
+    <div class="mv-meta" id="lv-meta"></div>
+    <hr class="mv-divider">
+    <div class="mv-label">Log Entry</div>
+    <div class="mv-content" id="lv-content"></div>
+    <div id="lv-tags-row" class="tag-row" style="margin-top:14px"></div>
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeLogViewModal()">Close</button>
+        <button class="btn btn-c btn-sm" id="lv-edit-btn">Edit Entry</button>
+    </div>
+</div>
+</div>
+
+<!-- ══ BOOKMARK VIEW MODAL ══════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="bm-view-modal">
+<div class="modal-view modal-view-c">
+    <div class="modal-title" style="color:var(--ed-cyan);border-bottom-color:var(--border-c)">System Bookmark</div>
+    <div class="mv-sys-row">
+        <div class="mv-sysname" id="bv-system">—</div>
+        <button class="mv-copy-btn" id="bv-copy-btn" onclick="copyBvSystem()" title="Copy system name to clipboard">⧉ Copy System</button>
+    </div>
+    <div class="mv-meta" id="bv-meta"></div>
+    <hr class="mv-divider mv-divider-c">
+    <div id="bv-detail-grid" class="mv-detail-grid"></div>
+    <div id="bv-notes-wrap" style="display:none">
+        <div class="mv-label" style="margin-top:18px">Notes</div>
+        <div class="mv-notes-block mv-notes-block-c">
+            <div class="mv-content" id="bv-notes" style="font-size:16px"></div>
+        </div>
+    </div>
+    <div id="bv-tags-row" class="tag-row" style="margin-top:14px"></div>
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeBmViewModal()">Close</button>
+        <button class="btn btn-c btn-sm" id="bv-edit-btn">Edit Bookmark</button>
+    </div>
+</div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════
 // ED DATE SYSTEM
@@ -989,6 +1056,7 @@ function renderLogs() {
             <div class="log-entry-body">${e.content.replace(/\n/g,'<br>')}</div>
             ${e.tags?.length?`<div class="tag-row">${e.tags.map(t=>`<span class="tag tag-clickable" onclick="filterLogsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts">
+                <button class="btn btn-sm" onclick="openLogViewModal('${e.id}')">View</button>
                 <button class="btn btn-c btn-sm" onclick="openLogModal('${e.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteLog('${e.id}')">Delete</button>
             </div>`;
@@ -1081,6 +1149,7 @@ function renderBookmarks() {
             ${hasCoords?`<div class="bm-coords">${coordStr}</div>`:''}
             ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBmsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts" style="margin-top:10px">
+                <button class="btn btn-sm" onclick="openBmViewModal('${b.id}')">View</button>
                 <button class="btn btn-c btn-sm" onclick="openBmModal('${b.id}')">Edit</button>
                 <button class="btn btn-d btn-sm" onclick="deleteBm('${b.id}')">Delete</button>
             </div>
@@ -1431,6 +1500,140 @@ async function importData() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// LOG ENTRY VIEW MODAL
+// ══════════════════════════════════════════════════════════════════
+let _lvCurrentId = null;
+
+function openLogViewModal(id) {
+    const e = gLogs.find(l => l.id === id);
+    if (!e) return;
+    _lvCurrentId = id;
+
+    document.getElementById('lv-title').textContent = e.title;
+
+    const sysEl = document.getElementById('lv-system');
+    sysEl.textContent = e.system || '—';
+    // Show copy button only if there's a system
+    document.getElementById('lv-copy-btn').style.display = e.system ? 'inline-block' : 'none';
+
+    let meta = `◈ ${edDate(e.ts)}`;
+    if (e.body) meta += `  ·  ${e.body}`;
+    document.getElementById('lv-meta').textContent = meta;
+
+    document.getElementById('lv-content').textContent = e.content;
+
+    const tagsRow = document.getElementById('lv-tags-row');
+    tagsRow.innerHTML = e.tags?.length
+        ? e.tags.map(t => `<span class="tag">${t}</span>`).join('')
+        : '';
+
+    document.getElementById('lv-edit-btn').onclick = () => {
+        closeLogViewModal();
+        openLogModal(id);
+    };
+
+    document.getElementById('log-view-modal').classList.add('open');
+}
+
+function closeLogViewModal() {
+    document.getElementById('log-view-modal').classList.remove('open');
+    _lvCurrentId = null;
+}
+
+function copyLvSystem() {
+    const sys = document.getElementById('lv-system').textContent;
+    if (!sys || sys === '—') return;
+    navigator.clipboard.writeText(sys).then(() => {
+        const btn = document.getElementById('lv-copy-btn');
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = '⧉ Copy System';
+            btn.classList.remove('copied');
+        }, 1800);
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOOKMARK VIEW MODAL
+// ══════════════════════════════════════════════════════════════════
+let _bvCurrentId = null;
+
+function openBmViewModal(id) {
+    const b = gBm.find(x => x.id === id);
+    if (!b) return;
+    _bvCurrentId = id;
+
+    document.getElementById('bv-system').textContent = b.system;
+
+    const typeColor = typeCol[b.type] || '#4A6A8A';
+    document.getElementById('bv-meta').innerHTML =
+        `<span style="color:${typeColor};letter-spacing:2px">${b.type}</span>` +
+        `  ·  Bookmarked ${edDateShort(b.ts)}`;
+
+    // Detail grid
+    const grid = document.getElementById('bv-detail-grid');
+    const details = [];
+    const hasCoords = b.lat !== null && b.lat !== undefined && b.lon !== null && b.lon !== undefined;
+    if (hasCoords) {
+        details.push(['Latitude', b.lat]);
+        details.push(['Longitude', b.lon]);
+        if (b.z !== null && b.z !== undefined) details.push(['Altitude / Depth', b.z]);
+    }
+    if (b.type) details.push(['Type', b.type]);
+
+    grid.innerHTML = details.length
+        ? details.map(([label, val]) => `
+            <div class="mv-detail-item">
+                <div class="mv-label">${label}</div>
+                <div class="mv-detail-val">${val}</div>
+            </div>`).join('')
+        : '';
+    grid.style.display = details.length ? 'grid' : 'none';
+
+    // Notes
+    const notesWrap = document.getElementById('bv-notes-wrap');
+    if (b.notes) {
+        document.getElementById('bv-notes').textContent = b.notes;
+        notesWrap.style.display = 'block';
+    } else {
+        notesWrap.style.display = 'none';
+    }
+
+    // Tags
+    const tagsRow = document.getElementById('bv-tags-row');
+    tagsRow.innerHTML = b.tags?.length
+        ? b.tags.map(t => `<span class="tag">${t}</span>`).join('')
+        : '';
+
+    document.getElementById('bv-edit-btn').onclick = () => {
+        closeBmViewModal();
+        openBmModal(id);
+    };
+
+    document.getElementById('bm-view-modal').classList.add('open');
+}
+
+function closeBmViewModal() {
+    document.getElementById('bm-view-modal').classList.remove('open');
+    _bvCurrentId = null;
+}
+
+function copyBvSystem() {
+    const sys = document.getElementById('bv-system').textContent;
+    if (!sys || sys === '—') return;
+    navigator.clipboard.writeText(sys).then(() => {
+        const btn = document.getElementById('bv-copy-btn');
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = '⧉ Copy System';
+            btn.classList.remove('copied');
+        }, 1800);
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════
 // TAG FILTER HELPERS — clicking a tag populates the filter box
 // ══════════════════════════════════════════════════════════════════
 function filterLogsByTag(tag) {
@@ -1455,6 +1658,8 @@ function filterBmsByTag(tag) {
 // Modal overlay close
 document.getElementById('log-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogModal(); });
 document.getElementById('bm-modal').addEventListener('click',  e => { if(e.target===e.currentTarget) closeBmModal(); });
+document.getElementById('log-view-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogViewModal(); });
+document.getElementById('bm-view-modal').addEventListener('click',  e => { if(e.target===e.currentTarget) closeBmViewModal(); });
 </script>
 </body>
 </html>
