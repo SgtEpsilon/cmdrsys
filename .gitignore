@@ -52,3 +52,4 @@ desktop.ini
 # ── Vite / build cache ────────────────────────────────────────────
 Android/.vite/
 .vite/
+*.zip
