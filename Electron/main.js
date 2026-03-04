@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
@@ -53,6 +53,25 @@ async function initDB() {
             name TEXT PRIMARY KEY,
             ts   INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS body_notes (
+            id          TEXT PRIMARY KEY,
+            ts          INTEGER NOT NULL,
+            system      TEXT NOT NULL,
+            body_name   TEXT NOT NULL,
+            body_type   TEXT,
+            star_class  TEXT,
+            atmo_type   TEXT,
+            gravity     REAL,
+            landable    INTEGER DEFAULT 0,
+            bio_signals INTEGER DEFAULT 0,
+            geo_signals INTEGER DEFAULT 0,
+            terraform   TEXT,
+            distance_ls REAL,
+            value       INTEGER DEFAULT 0,
+            notes       TEXT,
+            tags        TEXT DEFAULT '[]',
+            coords      TEXT DEFAULT '[]'
+        );
     `);
 
     // Migration: rename x/y columns to lat/lon if they still exist from an older DB
@@ -64,6 +83,15 @@ async function initDB() {
             console.log('Migrated bookmarks: x→lat, y→lon');
         }
     } catch(e) { console.warn('Migration check skipped:', e.message); }
+
+    // Migration: add coords column to body_notes if missing
+    try {
+        const bnCols = queryAll(`PRAGMA table_info(body_notes)`).map(r => r.name);
+        if (!bnCols.includes('coords')) {
+            db.run(`ALTER TABLE body_notes ADD COLUMN coords TEXT DEFAULT '[]'`);
+            console.log('Migrated body_notes: added coords column');
+        }
+    } catch(e) { console.warn('body_notes coords migration skipped:', e.message); }
 
     // Flush immediately on first init so the file exists
     flushDB();
@@ -315,6 +343,8 @@ function startSyncServer() {
                                     .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
                     logs:      queryAll('SELECT * FROM logs ORDER BY ts DESC')
                                     .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    body_notes: queryAll('SELECT * FROM body_notes ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]') })),
                     settings: {
                         cmdr:   getSetting('cmdr'),
                         ship:   getSetting('ship'),
@@ -335,11 +365,12 @@ function startSyncServer() {
             try {
                 const bmCount  = queryGet('SELECT COUNT(*) as n FROM bookmarks')?.n ?? 0;
                 const logCount = queryGet('SELECT COUNT(*) as n FROM logs')?.n ?? 0;
+                const bnCount  = queryGet('SELECT COUNT(*) as n FROM body_notes')?.n ?? 0;
                 res.writeHead(200);
                 res.end(JSON.stringify({
                     ok: true, app: 'CMDRSYS', schema_version: 2,
                     ts: Date.now(),
-                    counts: { bookmarks: bmCount, logs: logCount },
+                    counts: { bookmarks: bmCount, logs: logCount, body_notes: bnCount },
                     cmdr: getSetting('cmdr'), system: getSetting('system'),
                 }));
             } catch (e) {
@@ -394,6 +425,27 @@ function startSyncServer() {
                         });
                     }
 
+                    // Merge body_notes — last ts wins per id
+                    if (Array.isArray(data.body_notes)) {
+                        data.body_notes.forEach(n => {
+                            const existing = queryGet('SELECT ts FROM body_notes WHERE id = ?', [n.id]);
+                            if (!existing || existing.ts < n.ts) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO body_notes
+                                     (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,
+                                      landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
+                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                    [n.id, n.ts, n.system, n.body_name, n.body_type || null,
+                                     n.star_class || null, n.atmo_type || null, n.gravity ?? null,
+                                     n.landable ? 1 : 0, n.bio_signals ?? 0, n.geo_signals ?? 0,
+                                     n.terraform || null, n.distance_ls ?? null, n.value ?? 0,
+                                     n.notes || '', JSON.stringify(n.tags || []), JSON.stringify(n.coords || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
                     if (changed) {
                         saveDB();
                         // Notify renderer to refresh its in-memory data
@@ -435,6 +487,20 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/log/'.length));
             try {
                 db.run('DELETE FROM logs WHERE id = ?', [id]);
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── DELETE /sync/body-note/:id — Android deletes a body note ─────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/body-note/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/body-note/'.length));
+            try {
+                db.run('DELETE FROM body_notes WHERE id = ?', [id]);
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -516,6 +582,7 @@ app.on('window-all-closed', () => {
 ipcMain.on('window:minimize', () => win.minimize());
 ipcMain.on('window:maximize', () => win.isMaximized() ? win.unmaximize() : win.maximize());
 ipcMain.on('window:close',    () => win.close());
+ipcMain.handle('shell:openExternal', (_, url) => shell.openExternal(url));
 
 // ─── renderer:ready — triggered by renderer on mount ─────────────────────────
 ipcMain.handle('renderer:ready', () => {
@@ -707,4 +774,31 @@ ipcMain.handle('import:json', async () => {
         console.error('Import error:', e);
         return { ok: false, error: e.message };
     }
+});
+
+// ── Body / Planet Notes ───────────────────────────────────────────────────────
+ipcMain.handle('bodynotes:getAll', () =>
+    queryAll('SELECT * FROM body_notes ORDER BY ts DESC')
+        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]'), landable: !!r.landable }))
+);
+
+ipcMain.handle('bodynotes:save', (_, n) => {
+    const tags   = JSON.stringify(n.tags   || []);
+    const coords = JSON.stringify(n.coords || []);
+    db.run(
+        `INSERT OR REPLACE INTO body_notes
+         (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [n.id, n.ts, n.system, n.body_name, n.body_type||'', n.star_class||'', n.atmo_type||'',
+         n.gravity||null, n.landable?1:0, n.bio_signals||0, n.geo_signals||0,
+         n.terraform||'', n.distance_ls||null, n.value||0, n.notes||'', tags, coords]
+    );
+    saveDB();
+    return true;
+});
+
+ipcMain.handle('bodynotes:delete', (_, id) => {
+    db.run('DELETE FROM body_notes WHERE id=?', [id]);
+    saveDB();
+    return true;
 });

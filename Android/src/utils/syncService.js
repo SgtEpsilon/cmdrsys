@@ -121,13 +121,17 @@ export async function pullFromDesktop() {
   return data;
 }
 
-export async function pushToDesktop(bookmarks, logs) {
+export async function pushToDesktop(bookmarks, logs, bodyNotes) {
   const { url, token } = await getSyncConfig();
   if (!url) throw new Error('No sync URL configured');
   const res = await fetchWithRetry(`${url}/sync`, {
     method:  'POST',
     headers: authHeaders(token),
-    body:    JSON.stringify({ bookmarks: (bookmarks || []).map(normaliseBm), logs }),
+    body:    JSON.stringify({
+      bookmarks:   (bookmarks  || []).map(normaliseBm),
+      logs,
+      body_notes:  bodyNotes || [],
+    }),
   });
   if (res.status === 401) throw new Error('Sync token mismatch — check token in Settings');
   if (!res.ok) throw new Error(`Desktop responded HTTP ${res.status}`);
@@ -154,7 +158,17 @@ export async function deleteLogOnDesktop(id) {
   } catch (_) { /* non-fatal */ }
 }
 
-export async function fullSync(localBookmarks, localLogs) {
+export async function deleteBodyNoteOnDesktop(id) {
+  const { url, token } = await getSyncConfig();
+  if (!url) return;
+  try {
+    await fetchWithTimeout(`${url}/sync/body-note/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(token),
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+export async function fullSync(localBookmarks, localLogs, localBodyNotes) {
   const remote = await pullFromDesktop();
 
   const bmMap = new Map((localBookmarks || []).map(b => [b.id, normaliseBm(b)]));
@@ -172,11 +186,19 @@ export async function fullSync(localBookmarks, localLogs) {
   }
   const mergedLogs = [...logMap.values()].sort((a, b) => b.ts - a.ts);
 
-  await pushToDesktop(mergedBookmarks, mergedLogs);
+  const bnMap = new Map((localBodyNotes || []).map(n => [n.id, n]));
+  for (const rn of (remote.body_notes || [])) {
+    const local = bnMap.get(rn.id);
+    if (!local || local.ts < rn.ts) bnMap.set(rn.id, rn);
+  }
+  const mergedBodyNotes = [...bnMap.values()].sort((a, b) => b.ts - a.ts);
+
+  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes);
 
   return {
     bookmarks:           mergedBookmarks,
     logs:                mergedLogs,
+    bodyNotes:           mergedBodyNotes,
     settingsFromDesktop: remote.settings || {},
     schemaVersion:       remote.schema_version ?? 1,
   };

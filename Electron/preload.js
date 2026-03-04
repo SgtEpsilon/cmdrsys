@@ -49,6 +49,13 @@ contextBridge.exposeInMainWorld('api', {
     onSyncDataUpdated:   (cb) => ipcRenderer.on('sync:dataUpdated',   ()         => cb()),
     onSyncIpChanged:     (cb) => ipcRenderer.on('sync:ipChanged',     (_, info)  => cb(info)),
 
+    // Body Notes
+    getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
+    saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
+    deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    // Open URL in system browser
+    openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
+
     // Export / Import
     exportJSON: () => ipcRenderer.invoke('export:json'),
     importJSON: () => ipcRenderer.invoke('import:json'),

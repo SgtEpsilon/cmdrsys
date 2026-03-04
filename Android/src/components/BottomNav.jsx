@@ -1,15 +1,16 @@
 import React from 'react';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', icon: '◈', label: 'Dashboard' },
-  { id: 'logs',      icon: '◉', label: 'Log' },
-  { id: 'bookmarks', icon: '◎', label: 'Bookmarks' },
-  { id: 'visited',   icon: '◇', label: 'Visited' },
-  { id: 'settings',  icon: '⚙', label: 'Settings' },
+  { id: 'dashboard',  icon: '◈', label: 'Dashboard' },
+  { id: 'logs',       icon: '◉', label: 'Log' },
+  { id: 'bookmarks',  icon: '◎', label: 'Bookmarks' },
+  { id: 'bodynotes',  icon: '⬡', label: 'Bodies' },
+  { id: 'visited',    icon: '◇', label: 'Visited' },
+  { id: 'settings',   icon: '⚙', label: 'Settings' },
 ];
 
-export default function BottomNav({ activeView, onNavigate, logCount, bmCount }) {
-  const badges = { logs: logCount, bookmarks: bmCount };
+export default function BottomNav({ activeView, onNavigate, logCount, bmCount, bnCount }) {
+  const badges = { logs: logCount, bookmarks: bmCount, bodynotes: bnCount };
 
   return (
     <nav style={{

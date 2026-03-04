@@ -8,6 +8,7 @@ import BottomNav       from './components/BottomNav.jsx';
 import Dashboard       from './components/Dashboard.jsx';
 import LogsView        from './components/LogsView.jsx';
 import BookmarksView   from './components/BookmarksView.jsx';
+import BodyNotesView   from './components/BodyNotesView.jsx';
 import VisitedView     from './components/VisitedView.jsx';
 import SettingsView    from './components/SettingsView.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
@@ -150,6 +151,14 @@ export default function App() {
             onPrefillConsumed={() => setPendingBookmark(null)}
           />
         )}
+        {view === 'bodynotes' && (
+          <BodyNotesView
+            bodyNotes={store.bodyNotes}
+            upsertBodyNote={async (n) => { await store.upsertBodyNote(n); toast('⬡ Body note saved'); }}
+            deleteBodyNote={async (id) => { await store.deleteBodyNote(id); toast('Body note deleted'); }}
+            currentSystem={store.settings.system}
+          />
+        )}
         {view === 'visited' && (
           <VisitedView
             visited={store.visited}
@@ -181,6 +190,7 @@ export default function App() {
         onNavigate={navigate}
         logCount={store.logs.length}
         bmCount={store.bookmarks.length}
+        bnCount={store.bodyNotes.length}
       />
 
       {/* ── Toast ────────────────────────────────────────────────── */}

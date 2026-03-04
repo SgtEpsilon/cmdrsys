@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://spansh.co.uk;">
     <title>CMDRSYS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -343,6 +343,84 @@
         .mv-detail-val { font-family:var(--font-mono); font-size:13px; color:var(--ed-cyan); margin-top:3px; user-select:text; }
         .mv-notes-block { background:rgba(255,98,0,0.04); border-left:2px solid var(--ed-orange); padding:12px 16px; margin-top:14px; }
         .mv-notes-block-c { background:rgba(0,212,255,0.04); border-left-color:var(--ed-cyan); }
+
+        /* ── BODY NOTES ──────────────────────────────── */
+        .bn-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+        .bn-card { border:1px solid rgba(0,212,255,0.25); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; }
+        .bn-card:hover { border-color:rgba(0,212,255,0.5); box-shadow:0 0 14px rgba(0,212,255,0.1); }
+        .bn-body { font-family:var(--font-hud); font-size:13px; color:var(--ed-cyan); margin-bottom:2px; }
+        .bn-sys  { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:8px; }
+        .bn-badges { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+        .bn-badge { font-family:var(--font-mono); font-size:10px; padding:2px 7px; border:1px solid; letter-spacing:1px; }
+        .bn-badge-type { border-color:rgba(255,98,0,0.5); color:var(--ed-orange); }
+        .bn-badge-land { border-color:rgba(0,255,136,0.5); color:#00FF88; }
+        .bn-badge-atmo { border-color:rgba(0,212,255,0.4); color:var(--ed-cyan); }
+        .bn-badge-bio  { border-color:rgba(180,100,255,0.5); color:#C87AFF; }
+        .bn-badge-geo  { border-color:rgba(255,180,50,0.5); color:#FFB432; }
+        .bn-stat-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+        .bn-stat { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); }
+        .bn-stat span { color:var(--ed-cyan); }
+        /* toggle button */
+        .toggle-row { display:flex; gap:10px; align-items:center; margin-bottom:12px; }
+        .toggle-btn { font-family:var(--font-mono); font-size:11px; padding:6px 14px; border:1px solid var(--border-c); background:transparent; color:var(--text-dim); cursor:pointer; letter-spacing:1px; transition:all 0.15s; }
+        .toggle-btn.active { background:rgba(0,212,255,0.15); color:var(--ed-cyan); border-color:var(--ed-cyan); }
+        /* ── ROUTE PLANNER ───────────────────────────── */
+        /* Tab bar — matches app nav style */
+        .rp-tab { font-family:var(--font-hud); font-size:11px; letter-spacing:2px; text-transform:uppercase; padding:9px 18px; border:1px solid transparent; background:transparent; color:var(--text-dim); cursor:pointer; transition:all 0.15s; clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%); }
+        .rp-tab:hover { color:var(--text-primary); border-color:var(--border-o); background:rgba(255,98,0,0.04); }
+        .rp-tab.active { color:var(--ed-orange); border-color:var(--border-o); background:rgba(255,98,0,0.09); text-shadow:0 0 8px rgba(255,98,0,0.4); }
+        .rp-tab#rp-tab-tourist.active { color:var(--ed-cyan); border-color:var(--border-c); background:rgba(0,212,255,0.07); text-shadow:0 0 8px rgba(0,212,255,0.4); }
+        /* Waypoint rows — use vis-row style */
+        .route-row { display:flex; align-items:center; gap:10px; padding:8px 14px; margin-bottom:5px; border:1px solid rgba(0,212,255,0.15); background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%); font-family:var(--font-mono); font-size:12px; transition:border-color 0.12s; }
+        .route-row:hover { border-color:rgba(0,212,255,0.35); }
+        .route-row-dest { border-color:rgba(0,255,136,0.3); }
+        .route-row-dest:hover { border-color:rgba(0,255,136,0.55); }
+        .route-row.done-row { opacity:0.35; }
+        .route-idx { color:var(--text-dim); min-width:26px; font-size:10px; letter-spacing:1px; }
+        .route-sys { color:var(--ed-cyan); flex:1; user-select:text; }
+        .route-dist { color:var(--text-dim); font-size:10px; white-space:nowrap; letter-spacing:1px; }
+        .route-type-neutron { color:#C87AFF; }
+        .route-type-scoopable { color:var(--ed-orange); }
+        /* Progress bar */
+        .route-progress { height:2px; background:rgba(0,212,255,0.1); margin-bottom:16px; }
+        .route-progress-bar { height:2px; background:var(--ed-cyan); transition:width 0.4s; box-shadow:0 0 6px rgba(0,212,255,0.5); }
+        /* Summary stat cards — reuse stat-card style */
+        .route-summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+        .route-summary-cell { background:rgba(5,14,24,0.88); border:1px solid var(--border-c); padding:12px 10px; text-align:center; position:relative; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%); }
+        .route-summary-cell::before { content:''; position:absolute; top:0; right:0; width:8px; height:8px; background:var(--ed-cyan); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .route-summary-val { font-family:var(--font-hud); font-size:22px; font-weight:700; color:var(--ed-orange); text-shadow:0 0 12px rgba(255,98,0,0.6); line-height:1; }
+        .route-summary-lbl { font-family:var(--font-mono); font-size:9px; color:var(--text-dim); letter-spacing:2px; margin-top:5px; }
+        /* Waypoint tick dot */
+        .waypoint-tick { display:inline-block; width:10px; height:10px; border-radius:50%; background:transparent; border:1px solid var(--border-c); cursor:pointer; flex-shrink:0; transition:all 0.12s; }
+        .waypoint-tick:hover { border-color:var(--ed-cyan); }
+        .waypoint-tick.done { background:var(--ed-orange); border-color:var(--ed-orange); box-shadow:0 0 5px rgba(255,98,0,0.5); }
+        /* Tourist stop list items */
+        .tp-stop { display:flex; align-items:center; gap:10px; padding:7px 14px; border:1px solid rgba(0,212,255,0.15); background:rgba(5,14,24,0.8); margin-bottom:4px; clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%); font-family:var(--font-mono); font-size:12px; transition:border-color 0.12s; }
+        .tp-stop:hover { border-color:rgba(0,212,255,0.35); }
+        .tp-stop-num { color:var(--text-dim); min-width:22px; font-size:10px; }
+        .tp-stop-name { color:var(--ed-cyan); flex:1; user-select:text; }
+        .tp-stop-type { font-size:10px; letter-spacing:1px; color:var(--text-dim); }
+        .tp-stop-del { font-family:var(--font-hud); font-size:9px; letter-spacing:1px; padding:3px 8px; border:1px solid rgba(255,64,64,0.4); background:transparent; color:#FF4040; cursor:pointer; clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,0 100%); transition:all 0.12s; }
+        .tp-stop-del:hover { background:rgba(255,64,64,0.1); border-color:#FF4040; }
+        /* Bookmark picker modal */
+        .bm-pick-item { display:flex; align-items:center; gap:10px; padding:8px 14px; border:1px solid rgba(0,212,255,0.15); background:rgba(5,14,24,0.8); margin-bottom:4px; cursor:pointer; clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%); transition:all 0.12s; }
+        .bm-pick-item:hover { border-color:var(--ed-cyan); background:rgba(0,212,255,0.07); }
+        .bm-pick-sys { font-family:var(--font-hud); font-size:13px; color:var(--ed-cyan); flex:1; }
+        .bm-pick-type { font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--text-dim); }
+        /* Body note coordinate entries */
+        .coord-entry { border:1px solid rgba(0,212,255,0.2); background:rgba(5,14,24,0.75); padding:12px 14px; margin-bottom:8px; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%); position:relative; }
+        .coord-entry::before { content:''; position:absolute; top:0; right:0; width:8px; height:8px; background:var(--ed-cyan); clip-path:polygon(100% 0,0 0,100% 100%); }
+        .coord-entry-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+        .coord-entry-num { font-family:var(--font-hud); font-size:10px; color:var(--ed-cyan); letter-spacing:3px; }
+        .coord-latlng-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+        .coord-del-btn { font-family:var(--font-hud); font-size:9px; letter-spacing:1px; padding:4px 10px; border:1px solid rgba(255,64,64,0.4); background:transparent; color:#FF4040; cursor:pointer; clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,0 100%); transition:all 0.12s; }
+        .coord-del-btn:hover { background:rgba(255,64,64,0.1); border-color:#FF4040; }
+        /* Coord display on body card */
+        .bn-coord-list { margin-top:8px; border-top:1px solid rgba(0,212,255,0.1); padding-top:7px; }
+        .bn-coord-row { display:flex; align-items:baseline; gap:8px; padding:3px 0; font-family:var(--font-mono); font-size:10px; }
+        .bn-coord-latlng { color:var(--ed-cyan); letter-spacing:0.5px; }
+        .bn-coord-note { color:var(--text-dim); flex:1; font-size:10px; }
+
     </style>
 </head>
 <body>
@@ -412,6 +490,10 @@
         <span class="nav-icon">◎</span> Bookmarks
         <span class="nav-badge" id="badge-bm">0</span>
     </div>
+    <div class="nav-item" data-view="bodynotes">
+        <span class="nav-icon">⬡</span> Body Notes
+        <span class="nav-badge" id="badge-bn">0</span>
+    </div>
     <div class="nav-label" style="margin-top:6px">Data Feeds</div>
     <div class="nav-item" data-view="journal">
         <span class="nav-icon">▸</span> Live Journal
@@ -419,6 +501,9 @@
     </div>
     <div class="nav-item" data-view="visited">
         <span class="nav-icon">◇</span> Systems Visited
+    </div>
+    <div class="nav-item" data-view="spansh">
+        <span class="nav-icon">⊕</span> Route Planner
     </div>
     <div class="nav-label" style="margin-top:6px">Data</div>
     <div class="nav-item" data-view="settings">
@@ -533,7 +618,211 @@
         <div id="vis-list"></div>
     </div>
 
-    <!-- SETTINGS -->
+    <!-- BODY NOTES -->
+    <div class="view" id="view-bodynotes">
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Body Notes</div>
+                <div class="view-sub">Structured scan records — planets, moons, stars</div>
+            </div>
+            <button class="btn btn-c" onclick="openBnModal()">+ New Scan Note</button>
+        </div>
+        <div class="search-row">
+            <input type="text" class="search-in" id="bn-search" placeholder="SEARCH BODIES..." oninput="debouncedRenderBn()">
+            <select class="search-in form-sel" id="bn-filter-type" style="max-width:200px" onchange="debouncedRenderBn()">
+                <option value="">ALL TYPES</option>
+                <option value="Earth-like">Earth-like</option>
+                <option value="Water World">Water World</option>
+                <option value="Ammonia World">Ammonia World</option>
+                <option value="High Metal Content">High Metal Content</option>
+                <option value="Rocky">Rocky</option>
+                <option value="Icy">Icy</option>
+                <option value="Gas Giant">Gas Giant</option>
+                <option value="Star">Star</option>
+                <option value="Other">Other</option>
+            </select>
+            <select class="search-in form-sel" id="bn-filter-land" style="max-width:180px" onchange="debouncedRenderBn()">
+                <option value="">ALL</option>
+                <option value="1">LANDABLE ONLY</option>
+                <option value="0">NON-LANDABLE</option>
+            </select>
+        </div>
+        <div id="bn-grid" class="bn-grid"></div>
+    </div>
+
+    <!-- SPANSH ROUTE PLANNER -->
+    <div class="view" id="view-spansh">
+
+        <!-- Page header -->
+        <div class="view-hdr">
+            <div>
+                <div class="view-title">Route Planner</div>
+                <div class="view-sub">Spansh neutron highway &amp; tourist route optimiser</div>
+            </div>
+        </div>
+
+        <!-- ── Jump Range (shared, always visible) ──────────────────── -->
+        <div class="panel" style="margin-bottom:16px">
+            <div class="panel-title">Ship Jump Range</div>
+            <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+                <div class="form-group" style="margin-bottom:0;flex:0 0 180px">
+                    <label class="form-lbl">Max Range (LY)</label>
+                    <input type="number" class="form-input" id="rp-range" value="50" min="1" max="500" step="0.1">
+                </div>
+                <button class="btn btn-g btn-sm" onclick="rpReadJumpRange()" style="margin-bottom:1px">↺ Read from Journal</button>
+                <span id="rp-range-src" style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;padding-bottom:4px"></span>
+            </div>
+        </div>
+
+        <!-- ── Tab buttons ──────────────────────────────────────────── -->
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="rp-tab active" id="rp-tab-neutron" onclick="rpSwitchTab('neutron')">⚡ Neutron Plotter</button>
+            <button class="rp-tab" id="rp-tab-tourist" onclick="rpSwitchTab('tourist')">◎ Tourist Planner</button>
+        </div>
+
+        <!-- ══ NEUTRON PLOTTER ═══════════════════════════════════════ -->
+        <div id="rp-panel-neutron">
+
+            <div class="panel">
+                <div class="panel-title">Neutron Highway</div>
+                <div class="form-row" style="margin-bottom:12px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-lbl">From System</label>
+                        <input type="text" class="form-input" id="np-from" placeholder="Current system...">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-lbl">To System</label>
+                        <input type="text" class="form-input" id="np-to" placeholder="Destination...">
+                    </div>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="margin-bottom:0;flex:0 0 160px">
+                        <label class="form-lbl">Efficiency (%)</label>
+                        <input type="number" class="form-input" id="np-eff" value="60" min="1" max="100">
+                    </div>
+                    <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);padding-bottom:12px;max-width:300px;line-height:1.7">
+                        Lower efficiency = more neutron detours, fewer total jumps.
+                        Higher = straighter path, more standard jumps.
+                    </span>
+                </div>
+                <div class="btn-row">
+                    <button class="btn" onclick="npPlot()">⊕ Plot Route</button>
+                    <button class="btn btn-d btn-sm" id="np-clear-btn" onclick="npClear()" style="display:none">✕ Clear</button>
+                    <span id="np-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);padding:6px 0"></span>
+                </div>
+            </div>
+
+            <div class="route-progress" id="np-prog-wrap" style="display:none">
+                <div class="route-progress-bar" id="np-prog-bar" style="width:0%"></div>
+            </div>
+
+            <div id="np-summary" style="display:none">
+                <div class="route-summary-grid">
+                    <div class="route-summary-cell"><div class="route-summary-val" id="np-s-waypoints">0</div><div class="route-summary-lbl">Waypoints</div></div>
+                    <div class="route-summary-cell"><div class="route-summary-val" id="np-s-dist">0</div><div class="route-summary-lbl">Distance LY</div></div>
+                    <div class="route-summary-cell"><div class="route-summary-val" id="np-s-neutrons">0</div><div class="route-summary-lbl">Neutron Stars</div></div>
+                    <div class="route-summary-cell"><div class="route-summary-val" id="np-s-rem">0</div><div class="route-summary-lbl">Remaining</div></div>
+                </div>
+            </div>
+
+            <div id="np-route-list"></div>
+
+        </div>
+
+        <!-- ══ TOURIST PLANNER ═══════════════════════════════════════ -->
+        <div id="rp-panel-tourist" style="display:none">
+
+            <div class="panel">
+                <div class="panel-title">Route Setup</div>
+
+                <!-- Starting System + Destination System -->
+                <div class="form-row" style="margin-bottom:14px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-lbl">Starting System <span style="color:var(--ed-orange)">*</span></label>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" class="form-input" id="tp-source"
+                                   placeholder="Your current system..."
+                                   style="flex:1">
+                            <button class="btn btn-sm" onclick="tpFillSource()" title="Use current journal system" style="white-space:nowrap;padding:8px 10px">↺ Current</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-lbl">Destination System <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);letter-spacing:1px">(optional — defaults to last stop)</span></label>
+                        <input type="text" class="form-input" id="tp-dest"
+                               placeholder="Defaults to last waypoint if blank...">
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Systems to Visit</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:1.8;margin-bottom:14px">
+                    Add up to 20 waypoints. Spansh will find the optimal visit order to minimise total jumps.
+                </div>
+
+                <!-- Stop list -->
+                <div id="tp-stops-list" style="margin-bottom:12px"></div>
+
+                <!-- Add controls -->
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                    <input type="text" class="form-input" id="tp-add-input"
+                           placeholder="System name..."
+                           style="flex:1;min-width:180px"
+                           onkeydown="if(event.key==='Enter')tpAddStop()">
+                    <button class="btn btn-c btn-sm" onclick="tpAddStop()">+ Add System</button>
+                    <button class="btn btn-sm" onclick="tpAddCurrent()" title="Add your current journal system">+ Current</button>
+                    <button class="btn btn-sm" onclick="openBmPickModal()" title="Pick from your bookmarks">⊕ From Bookmarks</button>
+                </div>
+
+                <div class="btn-row" style="margin-top:12px">
+                    <button class="btn" onclick="tpPlot()">⊕ Plan Tourist Route</button>
+                    <button class="btn btn-d btn-sm" id="tp-clear-btn" onclick="tpClear()" style="display:none">✕ Clear Route</button>
+                    <button class="btn btn-d btn-sm" onclick="tpClearStops()">✕ Clear Stops</button>
+                    <span id="tp-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);padding:6px 0"></span>
+                </div>
+            </div>
+
+            <div class="route-progress" id="tp-prog-wrap" style="display:none">
+                <div class="route-progress-bar" id="tp-prog-bar" style="width:0%"></div>
+            </div>
+
+            <div id="tp-summary" style="display:none">
+                <!-- Table-style results matching Spansh layout -->
+                <div style="border:1px solid var(--border-c);background:rgba(5,14,24,0.9);overflow:hidden;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);position:relative">
+                    <div style="position:absolute;top:0;right:0;width:12px;height:12px;background:var(--ed-cyan);clip-path:polygon(100% 0,0 0,100% 100%)"></div>
+                    <!-- Column header row -->
+                    <div style="display:grid;grid-template-columns:44px 1fr 110px 130px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border-c);background:rgba(0,212,255,0.06)">
+                        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase">Done</div>
+                        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase">System Name</div>
+                        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;text-align:right">Jumps</div>
+                        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;text-align:right">Distance (LY)</div>
+                    </div>
+                    <!-- Route rows injected here -->
+                    <div id="tp-route-list"></div>
+                    <!-- Totals row -->
+                    <div id="tp-totals-row" style="display:grid;grid-template-columns:44px 1fr 110px 130px;align-items:center;padding:10px 14px;background:rgba(0,212,255,0.12);border-top:1px solid var(--border-c)">
+                        <div></div>
+                        <div style="font-family:var(--font-hud);font-size:11px;color:var(--ed-cyan);letter-spacing:2px">TOTALS</div>
+                        <div id="tp-s-jumps" style="font-family:var(--font-hud);font-size:14px;color:var(--ed-cyan);text-shadow:0 0 10px rgba(0,212,255,0.5);text-align:right">0</div>
+                        <div id="tp-s-dist"  style="font-family:var(--font-hud);font-size:14px;color:var(--ed-cyan);text-shadow:0 0 10px rgba(0,212,255,0.5);text-align:right">0</div>
+                    </div>
+                </div>
+                <!-- Small status line below -->
+                <div style="display:flex;gap:18px;padding:8px 2px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">
+                    <span>Stops: <span id="tp-s-stops" style="color:var(--ed-cyan)">0</span></span>
+                    <span>Remaining: <span id="tp-s-rem" style="color:var(--ed-orange)">0</span></span>
+                </div>
+            </div>
+
+            <!-- tp-route-list is now INSIDE tp-summary above; this empty div kept for non-summary state -->
+            <div id="tp-route-list-empty"></div>
+
+        </div>
+
+    </div>
+
+        <!-- SETTINGS -->
+
     <div class="view" id="view-settings">
         <div class="view-hdr">
             <div>
@@ -643,6 +932,160 @@
 
 </div><!-- /app -->
 
+<!-- ══ BODY NOTE MODAL ════════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="bn-modal">
+<div class="modal modal-c" style="width:720px;max-width:96vw">
+    <div class="modal-title" id="bn-modal-ttl">New Scan Note</div>
+    <input type="hidden" id="bn-eid">
+
+    <!-- Row 1: System + Body -->
+    <div class="form-row">
+        <div class="form-group"><label class="form-lbl">System</label><input type="text" class="form-input" id="bn-sys" placeholder="Star system..."></div>
+        <div class="form-group"><label class="form-lbl">Body Name</label><input type="text" class="form-input" id="bn-bname" placeholder="e.g. Sol 3 / Earth"></div>
+    </div>
+
+    <!-- Row 2: Body type / star class / terraform -->
+    <div class="form-row3">
+        <div class="form-group">
+            <label class="form-lbl">Body Type</label>
+            <select class="form-input form-sel" id="bn-btype">
+                <option value="">— Unknown —</option>
+                <option value="Earth-like">Earth-like World</option>
+                <option value="Water World">Water World</option>
+                <option value="Ammonia World">Ammonia World</option>
+                <option value="High Metal Content">High Metal Content</option>
+                <option value="Rocky">Rocky Body</option>
+                <option value="Rocky Ice">Rocky Ice Body</option>
+                <option value="Icy">Icy Body</option>
+                <option value="Metal Rich">Metal Rich</option>
+                <option value="Gas Giant">Gas Giant</option>
+                <option value="Class I Gas Giant">Class I Gas Giant</option>
+                <option value="Class II Gas Giant">Class II Gas Giant</option>
+                <option value="Class III Gas Giant">Class III Gas Giant</option>
+                <option value="Class IV Gas Giant">Class IV Gas Giant</option>
+                <option value="Class V Gas Giant">Class V Gas Giant</option>
+                <option value="Water Giant">Water Giant</option>
+                <option value="Star">Star</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-lbl">Star Class (if star)</label>
+            <select class="form-input form-sel" id="bn-starclass">
+                <option value="">— N/A —</option>
+                <option value="O">O (blue)</option>
+                <option value="B">B (blue-white)</option>
+                <option value="A">A (white)</option>
+                <option value="F">F (yellow-white)</option>
+                <option value="G">G (yellow)</option>
+                <option value="K">K (orange)</option>
+                <option value="M">M (red dwarf)</option>
+                <option value="L">L (brown dwarf)</option>
+                <option value="T">T (cool brown dwarf)</option>
+                <option value="Y">Y (ultra-cool)</option>
+                <option value="TTS">T Tauri</option>
+                <option value="Herbig">Herbig Ae/Be</option>
+                <option value="W">Wolf-Rayet</option>
+                <option value="Neutron">Neutron Star</option>
+                <option value="BlackHole">Black Hole</option>
+                <option value="SupermassiveBH">Supermassive BH</option>
+                <option value="WhiteDwarf">White Dwarf</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-lbl">Terraform Status</label>
+            <select class="form-input form-sel" id="bn-terraform">
+                <option value="">None</option>
+                <option value="Candidate">Terraform Candidate</option>
+                <option value="Terraformable">Terraformable</option>
+                <option value="Terraformed">Terraformed</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Row 3: Atmosphere / gravity / distance -->
+    <div class="form-row3">
+        <div class="form-group">
+            <label class="form-lbl">Atmosphere</label>
+            <select class="form-input form-sel" id="bn-atmo">
+                <option value="">No Atmosphere</option>
+                <option value="Thin">Thin</option>
+                <option value="Suitable For Water">Suitable For Water</option>
+                <option value="Carbon Dioxide">Carbon Dioxide</option>
+                <option value="Nitrogen">Nitrogen</option>
+                <option value="Oxygen">Oxygen</option>
+                <option value="Water">Water</option>
+                <option value="Ammonia">Ammonia</option>
+                <option value="Methane">Methane</option>
+                <option value="Helium">Helium</option>
+                <option value="Silicate Vapour">Silicate Vapour</option>
+                <option value="Metallic Vapour">Metallic Vapour</option>
+                <option value="Neon">Neon</option>
+                <option value="Argon">Argon</option>
+                <option value="Sulphur Dioxide">Sulphur Dioxide</option>
+                <option value="Dense">Dense (mixed)</option>
+                <option value="Hot">Hot (thick)</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group"><label class="form-lbl">Gravity (g)</label><input type="number" class="form-input" id="bn-grav" placeholder="e.g. 0.28" step="0.01" min="0"></div>
+        <div class="form-group"><label class="form-lbl">Distance from Star (ls)</label><input type="number" class="form-input" id="bn-dist" placeholder="e.g. 320.4" step="0.1" min="0"></div>
+    </div>
+
+    <!-- Row 4: Landable / bio / geo -->
+    <div class="form-row3">
+        <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
+            <label class="form-lbl">Landable?</label>
+            <div class="toggle-row" style="margin-bottom:0">
+                <button type="button" class="toggle-btn" id="bn-land-no" onclick="setLandable(false)">NO</button>
+                <button type="button" class="toggle-btn" id="bn-land-yes" onclick="setLandable(true)">YES</button>
+            </div>
+        </div>
+        <div class="form-group"><label class="form-lbl">Biological Signals</label><input type="number" class="form-input" id="bn-bio" placeholder="0" min="0" max="20" value="0"></div>
+        <div class="form-group"><label class="form-lbl">Geological Signals</label><input type="number" class="form-input" id="bn-geo" placeholder="0" min="0" max="20" value="0"></div>
+    </div>
+
+    <!-- Row 5: Value / tags -->
+    <div class="form-row">
+        <div class="form-group"><label class="form-lbl">Estimated Value (Cr)</label><input type="number" class="form-input" id="bn-val" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-lbl">Tags (comma separated)</label><input type="text" class="form-input" id="bn-tags" placeholder="first-footfall, guardian, rare..."></div>
+    </div>
+
+    <!-- General notes -->
+    <div class="form-group"><label class="form-lbl">General Notes</label><textarea class="form-ta" id="bn-notes" rows="2" placeholder="Observations, materials found..."></textarea></div>
+
+    <!-- ── Surface Coordinates ────────────────────────────────────── -->
+    <div style="margin-top:4px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span class="panel-title" style="margin:0;padding:0;border:none;font-size:11px">Surface Coordinates</span>
+            <button type="button" class="btn btn-c btn-sm" onclick="bnAddCoord()">+ Add Coordinates</button>
+        </div>
+        <div id="bn-coords-list"></div>
+    </div>
+
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeBnModal()">Cancel</button>
+        <button class="btn btn-c btn-sm" onclick="saveBn()">Save Scan</button>
+    </div>
+</div>
+</div>
+
+<!-- ══ BOOKMARK PICKER MODAL ══════════════════════════════════════════════════ -->
+<div class="modal-bg" id="bm-pick-modal">
+<div class="modal modal-c" style="width:520px">
+    <div class="modal-title">Add System from Bookmarks</div>
+    <div class="search-row" style="margin-bottom:12px">
+        <input type="text" class="search-in" id="bm-pick-search"
+               placeholder="FILTER BOOKMARKS..."
+               oninput="renderBmPicker()">
+    </div>
+    <div id="bm-pick-list" style="max-height:380px;overflow-y:auto"></div>
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeBmPickModal()">Close</button>
+    </div>
+</div>
+</div>
+
 <!-- ══ LOG MODAL ═══════════════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="log-modal">
 <div class="modal">
@@ -741,6 +1184,51 @@
     </div>
 </div>
 </div>
+
+<!-- ══ BODY NOTE VIEW MODAL ══════════════════════════════════════════════════ -->
+<div class="modal-bg" id="bn-view-modal">
+<div class="modal-view modal-view-c" style="width:680px">
+    <div class="modal-title" style="color:var(--ed-cyan);border-bottom-color:var(--border-c)">Scan Note</div>
+
+    <!-- Body name + system -->
+    <div class="mv-sys-row">
+        <div class="mv-sysname" id="bnv-bodyname">—</div>
+        <button class="mv-copy-btn" id="bnv-copy-btn" onclick="copyBnvSystem()" title="Copy system name">⧉ Copy System</button>
+    </div>
+    <div class="mv-meta" id="bnv-meta"></div>
+
+    <hr class="mv-divider mv-divider-c">
+
+    <!-- Detail grid: body type, atmo, gravity, distance, signals, value -->
+    <div id="bnv-detail-grid" class="mv-detail-grid"></div>
+
+    <!-- Badges row: landable, terraform, star class -->
+    <div id="bnv-badges-row" class="tag-row" style="margin-top:14px"></div>
+
+    <!-- Notes -->
+    <div id="bnv-notes-wrap" style="display:none;margin-top:16px">
+        <div class="mv-label">Notes</div>
+        <div class="mv-notes-block mv-notes-block-c">
+            <div class="mv-content" id="bnv-notes" style="font-size:15px"></div>
+        </div>
+    </div>
+
+    <!-- Tags -->
+    <div id="bnv-tags-row" class="tag-row" style="margin-top:12px"></div>
+
+    <!-- Surface coordinates -->
+    <div id="bnv-coords-wrap" style="display:none;margin-top:18px">
+        <div class="mv-label" style="margin-bottom:10px">Surface Coordinates</div>
+        <div id="bnv-coords-list"></div>
+    </div>
+
+    <div class="modal-acts">
+        <button class="btn btn-d btn-sm" onclick="closeBnViewModal()">Close</button>
+        <button class="btn btn-c btn-sm" id="bnv-edit-btn">Edit Scan Note</button>
+    </div>
+</div>
+</div>
+
 
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -1464,8 +1952,9 @@ window.api.onSyncDataUpdated(async () => {
     gLogs    = await window.api.getLogs();
     gBm      = await window.api.getBookmarks();
     gVisited = await window.api.getVisited();
+    gBn      = await window.api.getBodyNotes();
     updateDash(); updateBadges();
-    renderLogs(); renderBookmarks(); renderVisited();
+    renderLogs(); renderBookmarks(); renderVisited(); debouncedRenderBn();
     document.getElementById('sync-last-ts').textContent = new Date().toLocaleTimeString();
     document.getElementById('sync-last-row').style.display = 'block';
     toast('↔ Sync data received from Android');
@@ -1657,11 +2146,816 @@ function filterBmsByTag(tag) {
     tf.focus();
 }
 
+// ══════════════════════════════════════════════════════════════════
+// BODY NOTE VIEW MODAL
+// ══════════════════════════════════════════════════════════════════
+let _bnvCurrentId = null;
+
+function openBnViewModal(id) {
+    _bnvCurrentId = id;
+    const n = gBn.find(x => x.id === id);
+    if (!n) return;
+
+    const icon = BN_TYPE_ICONS[n.body_type] || '◈';
+
+    // Header
+    document.getElementById('bnv-bodyname').textContent = `${icon} ${n.body_name}`;
+    document.getElementById('bnv-meta').textContent =
+        `◇ ${n.system}  ·  ${edDate(n.ts)}`;
+
+    // Detail grid
+    const details = [];
+    if (n.body_type)   details.push(['Body Type',    n.body_type]);
+    if (n.star_class)  details.push(['Star Class',   n.star_class]);
+    if (n.atmo_type)   details.push(['Atmosphere',   n.atmo_type]);
+    if (n.gravity !== null && n.gravity !== undefined) details.push(['Gravity', `${n.gravity} g`]);
+    if (n.distance_ls !== null && n.distance_ls !== undefined) details.push(['Dist. from Star', `${n.distance_ls} ls`]);
+    if (n.bio_signals > 0) details.push(['Bio Signals', `🌿 × ${n.bio_signals}`]);
+    if (n.geo_signals > 0) details.push(['Geo Signals', `🌋 × ${n.geo_signals}`]);
+    if (n.value > 0)   details.push(['Est. Value',   `${n.value.toLocaleString()} Cr`]);
+
+    const grid = document.getElementById('bnv-detail-grid');
+    grid.innerHTML = details.map(([label, val]) =>
+        `<div class="mv-detail-item">
+            <div class="mv-label">${label}</div>
+            <div class="mv-detail-val">${val}</div>
+        </div>`).join('');
+    grid.style.display = details.length ? 'grid' : 'none';
+
+    // Badges (landable, terraform)
+    const badges = [];
+    if (n.landable)  badges.push(`<span class="tag" style="border-color:rgba(0,255,136,0.5);color:#00FF88">✓ LANDABLE</span>`);
+    if (n.terraform) badges.push(`<span class="tag" style="border-color:rgba(0,200,80,0.4);color:#00C850">TF: ${n.terraform}</span>`);
+    document.getElementById('bnv-badges-row').innerHTML = badges.join('');
+
+    // Notes
+    const notesWrap = document.getElementById('bnv-notes-wrap');
+    if (n.notes) {
+        document.getElementById('bnv-notes').textContent = n.notes;
+        notesWrap.style.display = 'block';
+    } else {
+        notesWrap.style.display = 'none';
+    }
+
+    // Tags
+    document.getElementById('bnv-tags-row').innerHTML = n.tags?.length
+        ? n.tags.map(t => `<span class="tag">${t}</span>`).join('') : '';
+
+    // Coords
+    const coordsWrap = document.getElementById('bnv-coords-wrap');
+    const coords = n.coords || [];
+    if (coords.length) {
+        document.getElementById('bnv-coords-list').innerHTML = coords.map((c, i) => {
+            const latF = Number(c.lat).toFixed(4);
+            const lonF = Number(c.lon).toFixed(4);
+            const safeNote = (c.note || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return `<div class="bn-coord-row" style="padding:8px 12px;border:1px solid rgba(0,212,255,0.15);background:rgba(5,14,24,0.7);margin-bottom:5px;clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%)">
+                <span style="color:var(--ed-orange);font-size:11px;flex-shrink:0">◈ ${String(i+1).padStart(2,'0')}</span>
+                <span class="bn-coord-latlng" style="font-size:12px">${latF}°, ${lonF}°</span>
+                ${safeNote ? `<span class="bn-coord-note" style="font-size:11px">— ${safeNote}</span>` : ''}
+            </div>`;
+        }).join('');
+        coordsWrap.style.display = 'block';
+    } else {
+        coordsWrap.style.display = 'none';
+    }
+
+    // Edit button wires up to edit modal
+    document.getElementById('bnv-edit-btn').onclick = () => {
+        closeBnViewModal();
+        openBnModal(id);
+    };
+
+    document.getElementById('bn-view-modal').classList.add('open');
+}
+
+function closeBnViewModal() {
+    document.getElementById('bn-view-modal').classList.remove('open');
+    _bnvCurrentId = null;
+}
+
+function copyBnvSystem() {
+    const meta = document.getElementById('bnv-meta').textContent;
+    // meta format: "◇ SystemName  ·  date"
+    const sys = meta.replace(/^◇\s*/, '').split('·')[0].trim();
+    if (!sys) return;
+    navigator.clipboard.writeText(sys).then(() => {
+        const btn = document.getElementById('bnv-copy-btn');
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = '⧉ Copy System'; btn.classList.remove('copied'); }, 1800);
+    });
+}
+
+document.getElementById('bn-view-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeBnViewModal(); });
+
 // Modal overlay close
 document.getElementById('log-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogModal(); });
 document.getElementById('bm-modal').addEventListener('click',  e => { if(e.target===e.currentTarget) closeBmModal(); });
 document.getElementById('log-view-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogViewModal(); });
 document.getElementById('bm-view-modal').addEventListener('click',  e => { if(e.target===e.currentTarget) closeBmViewModal(); });
+
+// ══════════════════════════════════════════════════════════════════
+// BODY NOTES
+// ══════════════════════════════════════════════════════════════════
+let gBn = [];
+let _bnLandable = false;
+
+const debouncedRenderBn = debounce(() => renderBn(), 250);
+
+function setLandable(val) {
+    _bnLandable = val;
+    document.getElementById('bn-land-no').classList.toggle('active', !val);
+    document.getElementById('bn-land-yes').classList.toggle('active', val);
+}
+
+// ── Body note working coords array (populated when modal opens) ───
+let _bnCoords = [];
+
+function bnRenderCoords() {
+    const list = document.getElementById('bn-coords-list');
+    if (_bnCoords.length === 0) {
+        list.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);padding:4px 2px;letter-spacing:1px">No surface coordinates recorded.</div>';
+        return;
+    }
+    list.innerHTML = _bnCoords.map((c, i) => `
+        <div class="coord-entry">
+            <div class="coord-entry-hdr">
+                <span class="coord-entry-num">COORD ${String(i + 1).padStart(2,'0')}</span>
+                <button type="button" class="coord-del-btn" onclick="bnRemoveCoord(${i})">✕ Remove</button>
+            </div>
+            <div class="coord-latlng-row">
+                <div class="form-group" style="margin:0">
+                    <label class="form-lbl">Latitude</label>
+                    <input type="number" class="form-input" step="0.0001" min="-90" max="90"
+                           value="${c.lat ?? ''}" placeholder="-27.4512"
+                           oninput="_bnCoords[${i}].lat = this.value === '' ? null : parseFloat(this.value)">
+                </div>
+                <div class="form-group" style="margin:0">
+                    <label class="form-lbl">Longitude</label>
+                    <input type="number" class="form-input" step="0.0001" min="-180" max="180"
+                           value="${c.lon ?? ''}" placeholder="142.8803"
+                           oninput="_bnCoords[${i}].lon = this.value === '' ? null : parseFloat(this.value)">
+                </div>
+            </div>
+            <div class="form-group" style="margin:0">
+                <label class="form-lbl">What's at these coordinates?</label>
+                <input type="text" class="form-input" value="${(c.note||'').replace(/"/g,'&quot;')}"
+                       placeholder="Guardian site, biology sample, crashed ship, mineral deposit..."
+                       oninput="_bnCoords[${i}].note = this.value">
+            </div>
+        </div>`).join('');
+}
+
+function bnAddCoord() {
+    _bnCoords.push({ lat: null, lon: null, note: '' });
+    bnRenderCoords();
+    // Scroll modal to bottom so new entry is visible
+    const modal = document.querySelector('#bn-modal .modal');
+    if (modal) modal.scrollTop = modal.scrollHeight;
+}
+
+function bnRemoveCoord(i) {
+    _bnCoords.splice(i, 1);
+    bnRenderCoords();
+}
+
+function openBnModal(id) {
+    document.getElementById('bn-modal-ttl').textContent = id ? 'Edit Scan Note' : 'New Scan Note';
+    document.getElementById('bn-eid').value = id || '';
+    if (id) {
+        const n = gBn.find(x => x.id === id);
+        document.getElementById('bn-sys').value       = n.system || '';
+        document.getElementById('bn-bname').value     = n.body_name || '';
+        document.getElementById('bn-btype').value     = n.body_type || '';
+        document.getElementById('bn-starclass').value = n.star_class || '';
+        document.getElementById('bn-atmo').value      = n.atmo_type || '';
+        document.getElementById('bn-grav').value      = n.gravity ?? '';
+        document.getElementById('bn-dist').value      = n.distance_ls ?? '';
+        document.getElementById('bn-terraform').value = n.terraform || '';
+        document.getElementById('bn-bio').value       = n.bio_signals || 0;
+        document.getElementById('bn-geo').value       = n.geo_signals || 0;
+        document.getElementById('bn-val').value       = n.value || 0;
+        document.getElementById('bn-tags').value      = (n.tags || []).join(', ');
+        document.getElementById('bn-notes').value     = n.notes || '';
+        setLandable(!!n.landable);
+        _bnCoords = JSON.parse(JSON.stringify(n.coords || [])); // deep copy
+    } else {
+        ['bn-bname','bn-grav','bn-dist','bn-tags','bn-notes'].forEach(i => document.getElementById(i).value = '');
+        document.getElementById('bn-sys').value       = document.getElementById('top-sys').textContent;
+        document.getElementById('bn-btype').value     = '';
+        document.getElementById('bn-starclass').value = '';
+        document.getElementById('bn-atmo').value      = '';
+        document.getElementById('bn-terraform').value = '';
+        document.getElementById('bn-bio').value       = 0;
+        document.getElementById('bn-geo').value       = 0;
+        document.getElementById('bn-val').value       = 0;
+        setLandable(false);
+        _bnCoords = [];
+    }
+    bnRenderCoords();
+    document.getElementById('bn-modal').classList.add('open');
+    setTimeout(() => document.getElementById('bn-bname').focus(), 80);
+}
+function closeBnModal() { document.getElementById('bn-modal').classList.remove('open'); }
+
+async function saveBn() {
+    const id      = document.getElementById('bn-eid').value;
+    const bname   = document.getElementById('bn-bname').value.trim();
+    const system  = document.getElementById('bn-sys').value.trim();
+    if (!bname || !system) { toast('⚠ System and body name required'); return; }
+    // Filter out coords with no lat/lon
+    const validCoords = _bnCoords.filter(c => c.lat !== null && c.lon !== null && c.lat !== undefined && c.lon !== undefined);
+    const note = {
+        id:          id || Date.now().toString(),
+        ts:          id ? (gBn.find(x=>x.id===id)?.ts || Date.now()) : Date.now(),
+        system,
+        body_name:   bname,
+        body_type:   document.getElementById('bn-btype').value,
+        star_class:  document.getElementById('bn-starclass').value,
+        atmo_type:   document.getElementById('bn-atmo').value,
+        gravity:     parseFloat(document.getElementById('bn-grav').value) || null,
+        distance_ls: parseFloat(document.getElementById('bn-dist').value) || null,
+        terraform:   document.getElementById('bn-terraform').value,
+        landable:    _bnLandable,
+        bio_signals: parseInt(document.getElementById('bn-bio').value) || 0,
+        geo_signals: parseInt(document.getElementById('bn-geo').value) || 0,
+        value:       parseInt(document.getElementById('bn-val').value)  || 0,
+        notes:       document.getElementById('bn-notes').value.trim(),
+        tags:        document.getElementById('bn-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+        coords:      validCoords,
+    };
+    await window.api.saveBodyNote(note);
+    gBn = await window.api.getBodyNotes();
+    closeBnModal(); renderBn(); updateBnBadge();
+    toast('⬡ Body note saved');
+}
+
+async function deleteBn(id) {
+    if (!confirm('Delete this body note?')) return;
+    await window.api.deleteBodyNote(id);
+    gBn = await window.api.getBodyNotes();
+    renderBn(); updateBnBadge();
+    toast('Body note deleted');
+}
+
+function updateBnBadge() {
+    document.getElementById('badge-bn').textContent = gBn.length;
+}
+
+const BN_TYPE_ICONS = {
+    'Earth-like':'🌍','Water World':'🌊','Ammonia World':'⚗',
+    'Gas Giant':'🪐','Class I Gas Giant':'🪐','Class II Gas Giant':'🪐',
+    'Class III Gas Giant':'🪐','Class IV Gas Giant':'🪐','Class V Gas Giant':'🪐',
+    'Water Giant':'💧','Rocky':'🪨','Rocky Ice':'🧊','Icy':'❄',
+    'Metal Rich':'⚙','High Metal Content':'⚙','Star':'⭐','Neutron':'💫','BlackHole':'⚫','Other':'◈'
+};
+
+function renderBn() {
+    const q    = (document.getElementById('bn-search')?.value||'').toLowerCase();
+    const btyp = document.getElementById('bn-filter-type')?.value||'';
+    const land = document.getElementById('bn-filter-land')?.value;
+    const fl   = gBn.filter(n => {
+        const tm = !q || (n.body_name.toLowerCase().includes(q) || (n.system||'').toLowerCase().includes(q) || (n.notes||'').toLowerCase().includes(q));
+        const bm = !btyp || (n.body_type||'').includes(btyp);
+        const lm = land === '' || land === undefined ? true : (land==='1' ? !!n.landable : !n.landable);
+        return tm && bm && lm;
+    });
+    const c = document.getElementById('bn-grid');
+    if (fl.length === 0) {
+        c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⬡</div><div class="empty-txt">${gBn.length===0?'No scan notes yet. Hit + New Scan Note to start.':'No bodies match your filter.'}</div></div>`;
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    fl.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'bn-card';
+        const icon = BN_TYPE_ICONS[n.body_type] || '◈';
+        const badges = [];
+        if (n.body_type) badges.push(`<span class="bn-badge bn-badge-type">${icon} ${n.body_type}</span>`);
+        if (n.landable)  badges.push(`<span class="bn-badge bn-badge-land">✓ LANDABLE</span>`);
+        if (n.atmo_type) badges.push(`<span class="bn-badge bn-badge-atmo">ATM: ${n.atmo_type}</span>`);
+        if (n.bio_signals > 0) badges.push(`<span class="bn-badge bn-badge-bio">🌿 BIO ×${n.bio_signals}</span>`);
+        if (n.geo_signals > 0) badges.push(`<span class="bn-badge bn-badge-geo">🌋 GEO ×${n.geo_signals}</span>`);
+        if (n.terraform)   badges.push(`<span class="bn-badge" style="border-color:rgba(0,200,80,0.5);color:#00C850">TF: ${n.terraform}</span>`);
+        const coordCount = (n.coords || []).length;
+        if (coordCount > 0) badges.push(`<span class="bn-badge" style="border-color:rgba(255,98,0,0.5);color:var(--ed-orange)">📍 ${coordCount} COORD${coordCount !== 1 ? 'S' : ''}</span>`);
+
+        const stats = [];
+        if (n.gravity   !== null && n.gravity   !== undefined) stats.push(`Gravity: <span>${n.gravity}g</span>`);
+        if (n.distance_ls !== null && n.distance_ls !== undefined) stats.push(`Dist: <span>${n.distance_ls} ls</span>`);
+        if (n.value > 0) stats.push(`Value: <span>${n.value.toLocaleString()} Cr</span>`);
+        if (n.star_class) stats.push(`Class: <span>${n.star_class}</span>`);
+
+        card.innerHTML =
+            `<div class="bn-body">${n.body_name}</div>` +
+            `<div class="bn-sys">◇ ${n.system} · ${edDateShort(n.ts)}</div>` +
+            (badges.length ? `<div class="bn-badges">${badges.join('')}</div>` : '') +
+            (stats.length  ? `<div class="bn-stat-row">${stats.map(s=>`<div class="bn-stat">${s}</div>`).join('')}</div>` : '') +
+            (n.notes ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;line-height:1.5">${n.notes}</div>` : '') +
+            (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>` : '') +
+            ((n.coords||[]).length ? `<div class="bn-coord-list">${
+                n.coords.map((c, ci) => {
+                    const latF = Number(c.lat).toFixed(4);
+                    const lonF = Number(c.lon).toFixed(4);
+                    const safeNote = (c.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    return `<div class="bn-coord-row">
+                        <span style="color:var(--ed-orange);font-size:10px;flex-shrink:0">◈</span>
+                        <span class="bn-coord-latlng">${latF}°, ${lonF}°</span>
+                        ${safeNote ? `<span class="bn-coord-note">— ${safeNote}</span>` : ''}
+                    </div>`;
+                }).join('')
+            }</div>` : '') +
+            `<div class="entry-acts">
+                <button class="btn btn-sm" onclick="openBnViewModal('${n.id}')">View</button>
+                <button class="btn btn-c btn-sm" onclick="openBnModal('${n.id}')">Edit</button>
+                <button class="btn btn-d btn-sm" onclick="deleteBn('${n.id}')">Delete</button>
+            </div>`;
+        frag.appendChild(card);
+    });
+    c.replaceChildren(frag);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SPANSH ROUTE PLANNER
+// ══════════════════════════════════════════════════════════════════
+
+// ── Shared: read jump range from journal ──────────────────────────
+function rpReadJumpRange() {
+    const loadout = [...gJEvents].reverse().find(e => e.event === 'Loadout' && e.MaxJumpRange);
+    if (loadout) {
+        const r = parseFloat(loadout.MaxJumpRange.toFixed(2));
+        document.getElementById('rp-range').value = r;
+        const ship = loadout.Ship_Localised || loadout.Ship || 'unknown ship';
+        document.getElementById('rp-range-src').textContent = `${r} LY · ${ship}`;
+        toast(`↺ Jump range: ${r} LY (${ship})`);
+        return r;
+    }
+    // Fallback: last FSD jump distance
+    const jump = [...gJEvents].reverse().find(e => e.event === 'FSDJump' && e.JumpDist);
+    if (jump) {
+        const r = parseFloat(jump.JumpDist.toFixed(2));
+        document.getElementById('rp-range').value = r;
+        document.getElementById('rp-range-src').textContent = `${r} LY · last jump dist`;
+        toast(`↺ Using last jump distance: ${r} LY`);
+        return r;
+    }
+    toast('⚠ No Loadout event in journal — load a journal file first');
+    return null;
+}
+
+function rpGetRange() {
+    return parseFloat(document.getElementById('rp-range').value) || 50;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────
+function rpSwitchTab(tab) {
+    document.getElementById('rp-panel-neutron').style.display = tab === 'neutron' ? 'block' : 'none';
+    document.getElementById('rp-panel-tourist').style.display = tab === 'tourist' ? 'block' : 'none';
+    document.getElementById('rp-tab-neutron').classList.toggle('active', tab === 'neutron');
+    document.getElementById('rp-tab-tourist').classList.toggle('active', tab === 'tourist');
+}
+
+// ── Init spansh view ──────────────────────────────────────────────
+function initSpanshView() {
+    // Pre-fill From with current system (neutron plotter)
+    const fromEl = document.getElementById('np-from');
+    if (!fromEl.value) fromEl.value = document.getElementById('top-sys').textContent || '';
+    // Pre-fill Starting System for tourist planner
+    const srcEl = document.getElementById('tp-source');
+    if (!srcEl.value) srcEl.value = document.getElementById('top-sys').textContent || '';
+    // Auto-read jump range
+    const rangeEl = document.getElementById('rp-range');
+    if (!rangeEl.dataset.userSet) rpReadJumpRange();
+    // Render stop list
+    tpRenderStops();
+    // Default to neutron tab
+    rpSwitchTab('neutron');
+}
+
+function tpFillSource() {
+    const sys = document.getElementById('top-sys').textContent;
+    if (sys) document.getElementById('tp-source').value = sys;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// NEUTRON PLOTTER
+// ══════════════════════════════════════════════════════════════════
+let npRoute     = [];
+let npWaypoints = [];
+
+async function npPlot() {
+    const from  = document.getElementById('np-from').value.trim();
+    const to    = document.getElementById('np-to').value.trim();
+    const range = rpGetRange();
+    const eff   = parseInt(document.getElementById('np-eff').value) || 60;
+    if (!from || !to) { toast('⚠ Enter source and destination'); return; }
+
+    document.getElementById('np-status').textContent  = 'Submitting...';
+    document.getElementById('np-status').style.color  = 'var(--ed-cyan)';
+    document.getElementById('np-prog-wrap').style.display = 'block';
+    document.getElementById('np-prog-bar').style.width = '5%';
+    document.getElementById('np-clear-btn').style.display = 'inline-block';
+
+    try {
+        const res  = await fetch('https://spansh.co.uk/api/route', {
+            method: 'POST',
+            body: new URLSearchParams({ from, to, range, efficiency: eff })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let attempts = 0;
+        const poll = async () => {
+            attempts++;
+            document.getElementById('np-prog-bar').style.width = Math.min(90, 5 + attempts * 3) + '%';
+            document.getElementById('np-status').textContent = `Calculating... ${attempts}s`;
+            const r = await fetch(`https://spansh.co.uk/api/results/${data.job}`);
+            const d = await r.json();
+            if (d.status === 'ok' && d.result) {
+                document.getElementById('np-prog-bar').style.width = '100%';
+                setTimeout(() => document.getElementById('np-prog-wrap').style.display = 'none', 500);
+                npRoute     = d.result.system_jumps || [];
+                npWaypoints = new Array(npRoute.length).fill(false);
+                npRender();
+                document.getElementById('np-status').textContent = `${npRoute.length} waypoints`;
+                document.getElementById('np-status').style.color = '#00FF88';
+                toast(`⚡ Neutron route: ${npRoute.length} waypoints`);
+            } else if (attempts < 60) {
+                setTimeout(poll, 1000);
+            } else {
+                throw new Error('Timed out waiting for route');
+            }
+        };
+        setTimeout(poll, 1000);
+    } catch(e) {
+        document.getElementById('np-prog-wrap').style.display = 'none';
+        document.getElementById('np-status').textContent = 'Error: ' + e.message;
+        document.getElementById('np-status').style.color = 'var(--ed-orange)';
+        toast('⚠ ' + e.message);
+    }
+}
+
+function npRender() {
+    if (!npRoute.length) {
+        document.getElementById('np-route-list').innerHTML = '';
+        document.getElementById('np-summary').style.display = 'none';
+        return;
+    }
+    const neutrons  = npRoute.filter(s => s.neutron_star).length;
+    const totalDist = npRoute.reduce((a, s) => a + (s.distance_jumped || 0), 0);
+    const remaining = npWaypoints.filter(x => !x).length;
+    document.getElementById('np-s-waypoints').textContent = npRoute.length;
+    document.getElementById('np-s-dist').textContent      = Math.round(totalDist).toLocaleString();
+    document.getElementById('np-s-neutrons').textContent  = neutrons;
+    document.getElementById('np-s-rem').textContent       = remaining;
+    document.getElementById('np-summary').style.display   = 'block';
+
+    const frag = document.createDocumentFragment();
+    npRoute.forEach((s, i) => {
+        const name   = s.system || '?';
+        const isNeut = !!s.neutron_star;
+        const done   = npWaypoints[i];
+        const row    = document.createElement('div');
+        row.className = 'route-row';
+        row.style.opacity = done ? '0.35' : '1';
+        row.innerHTML =
+            `<span class="route-idx">${i + 1}</span>` +
+            `<span class="waypoint-tick ${done ? 'done' : ''}" onclick="npToggle(${i})"></span>` +
+            `<span class="route-sys ${isNeut ? 'route-type-neutron' : 'route-type-scoopable'}">${name}</span>` +
+            (isNeut ? `<span style="font-family:var(--font-mono);font-size:10px;color:#C87AFF">NEUTRON ⚡</span>` : '') +
+            (s.distance_jumped > 0 ? `<span class="route-dist">${s.distance_jumped.toFixed(1)} ly</span>` : '') +
+            `<button class="btn btn-c btn-sm" style="margin-left:auto;font-size:9px;padding:3px 8px"
+                onclick="navigator.clipboard.writeText(${JSON.stringify(name)}).then(()=>toast('◈ Copied'))">Copy</button>`;
+        frag.appendChild(row);
+    });
+    document.getElementById('np-route-list').replaceChildren(frag);
+}
+
+function npToggle(i) { npWaypoints[i] = !npWaypoints[i]; npRender(); }
+
+function npClear() {
+    npRoute = []; npWaypoints = [];
+    document.getElementById('np-route-list').innerHTML = '';
+    document.getElementById('np-summary').style.display = 'none';
+    document.getElementById('np-clear-btn').style.display = 'none';
+    document.getElementById('np-prog-wrap').style.display = 'none';
+    document.getElementById('np-status').textContent = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TOURIST PLANNER
+// ══════════════════════════════════════════════════════════════════
+let tpStops = [];
+let tpRoute = [];
+let tpDone  = [];
+
+function tpRenderStops() {
+    const el = document.getElementById('tp-stops-list');
+    if (!tpStops.length) {
+        el.innerHTML = `<div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);padding:6px 0">No systems added yet.</div>`;
+        return;
+    }
+    el.innerHTML = tpStops.map((s, i) =>
+        `<div class="tp-stop">
+            <span class="tp-stop-num">${i + 1}.</span>
+            <span class="tp-stop-name">${s}</span>
+            <button class="tp-stop-del" onclick="tpRemove(${i})">✕</button>
+        </div>`
+    ).join('');
+}
+
+function tpAddStop() {
+    const inp = document.getElementById('tp-add-input');
+    const val = inp.value.trim();
+    if (!val) return;
+    if (tpStops.length >= 20) { toast('⚠ Maximum 20 systems'); return; }
+    if (tpStops.some(s => s.toLowerCase() === val.toLowerCase())) { toast('⚠ Already in list'); inp.value = ''; return; }
+    tpStops.push(val);
+    inp.value = '';
+    tpRenderStops();
+}
+
+function tpRemove(i) { tpStops.splice(i, 1); tpRenderStops(); }
+
+function tpAddCurrent() {
+    const sys = document.getElementById('top-sys').textContent;
+    if (!sys || tpStops.some(s => s.toLowerCase() === sys.toLowerCase())) return;
+    if (tpStops.length >= 20) { toast('⚠ Maximum 20 systems'); return; }
+    tpStops.push(sys);
+    tpRenderStops();
+    toast(`+ Added ${sys}`);
+}
+
+function tpClearStops() {
+    tpStops = [];
+    tpRenderStops();
+    document.getElementById('tp-source').value = document.getElementById('top-sys').textContent || '';
+    document.getElementById('tp-dest').value = '';
+}
+
+async function tpPlot() {
+    const source = document.getElementById('tp-source').value.trim();
+    const destInput = document.getElementById('tp-dest').value.trim();
+    if (!source) { toast('⚠ Starting System is required'); document.getElementById('tp-source').focus(); return; }
+    if (tpStops.length < 1) { toast('⚠ Add at least 1 waypoint system'); return; }
+    const range = rpGetRange();
+
+    // Spansh requires source, destination, and range — destination defaults to last stop if blank
+    const destination = destInput || tpStops[tpStops.length - 1];
+
+    document.getElementById('tp-status').textContent = 'Submitting to Spansh...';
+    document.getElementById('tp-status').style.color = 'var(--ed-cyan)';
+    document.getElementById('tp-prog-wrap').style.display = 'block';
+    document.getElementById('tp-prog-bar').style.width = '5%';
+    document.getElementById('tp-clear-btn').style.display = 'inline-block';
+
+    try {
+        const params = new URLSearchParams();
+        params.append('range', range);
+        params.append('source', source);
+        params.append('destination', destination);
+        tpStops.forEach(s => params.append('systems[]', s));
+
+        const res  = await fetch('https://spansh.co.uk/api/tourist/route', { method: 'POST', body: params });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let attempts = 0;
+        const poll = async () => {
+            attempts++;
+            document.getElementById('tp-prog-bar').style.width = Math.min(90, 5 + attempts * 3) + '%';
+            document.getElementById('tp-status').textContent = `Optimising... ${attempts}s`;
+            const r = await fetch(`https://spansh.co.uk/api/results/${data.job}`);
+            const d = await r.json();
+            if (d.status === 'ok' && d.result) {
+                document.getElementById('tp-prog-bar').style.width = '100%';
+                setTimeout(() => document.getElementById('tp-prog-wrap').style.display = 'none', 500);
+                tpRoute = d.result.jumps || d.result.systems || d.result;
+                tpDone  = new Array(tpRoute.length).fill(false);
+                tpRender();
+                document.getElementById('tp-status').textContent = `${tpRoute.length} stops optimised`;
+                document.getElementById('tp-status').style.color = '#00FF88';
+                toast(`◎ Tourist route: ${tpRoute.length} stops`);
+            } else if (attempts < 60) {
+                setTimeout(poll, 1000);
+            } else {
+                throw new Error('Timed out');
+            }
+        };
+        setTimeout(poll, 1000);
+    } catch(e) {
+        document.getElementById('tp-prog-wrap').style.display = 'none';
+        document.getElementById('tp-status').textContent = 'Error: ' + e.message;
+        document.getElementById('tp-status').style.color = 'var(--ed-orange)';
+        toast('⚠ ' + e.message);
+    }
+}
+
+function tpRender() {
+    const list = document.getElementById('tp-route-list');
+    if (!tpRoute.length) {
+        list.innerHTML = '';
+        document.getElementById('tp-summary').style.display = 'none';
+        return;
+    }
+
+    const totalJumps = tpRoute.reduce((a, s) => a + (s.jumps || 0), 0);
+    const totalDist  = tpRoute.reduce((a, s) => a + (s.distance || 0), 0);
+    const remaining  = tpDone.filter(x => !x).length;
+
+    document.getElementById('tp-s-stops').textContent = tpRoute.length;
+    document.getElementById('tp-s-jumps').textContent = totalJumps.toLocaleString();
+    document.getElementById('tp-s-dist').textContent  = totalDist > 0 ? totalDist.toFixed(2) : '—';
+    document.getElementById('tp-s-rem').textContent   = remaining;
+    document.getElementById('tp-summary').style.display = 'block';
+
+    const frag = document.createDocumentFragment();
+    tpRoute.forEach((s, i) => {
+        const name   = s.system || s.name || '?';
+        const jumps  = s.jumps || 0;
+        const dist   = s.distance != null ? s.distance.toFixed(2) : '—';
+        const done   = tpDone[i];
+        const isLast = i === tpRoute.length - 1;
+
+        const row = document.createElement('div');
+        row.style.cssText = `
+            display:grid;
+            grid-template-columns:44px 1fr 110px 130px;
+            align-items:center;
+            padding:8px 14px;
+            border-bottom:1px solid rgba(0,212,255,0.07);
+            background:${done ? 'transparent' : (i % 2 === 0 ? 'rgba(0,212,255,0.02)' : 'transparent')};
+            opacity:${done ? '0.38' : '1'};
+            transition:background 0.12s, opacity 0.12s;
+            cursor:default;
+        `;
+        row.onmouseenter = () => { if (!done) row.style.background = 'rgba(0,212,255,0.06)'; };
+        row.onmouseleave = () => { row.style.background = done ? 'transparent' : (i % 2 === 0 ? 'rgba(0,212,255,0.02)' : 'transparent'); };
+
+        // Done checkbox cell
+        const checkCell = document.createElement('div');
+        checkCell.style.cssText = 'display:flex;align-items:center;justify-content:center';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = done;
+        cb.style.cssText = `
+            width:14px; height:14px;
+            cursor:pointer;
+            accent-color:var(--ed-cyan);
+        `;
+        cb.addEventListener('change', () => tpToggle(i));
+        checkCell.appendChild(cb);
+
+        // System name cell
+        const nameCell = document.createElement('div');
+        nameCell.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:0';
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = `
+            font-family:var(--font-body);
+            font-size:14px;
+            color:${isLast ? '#00FF88' : 'var(--ed-cyan)'};
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            text-shadow:${isLast ? '0 0 8px rgba(0,255,136,0.4)' : 'none'};
+            user-select:text;
+        `;
+        nameSpan.textContent = name;
+        const copyBtn = document.createElement('button');
+        copyBtn.style.cssText = `
+            font-family:var(--font-mono); font-size:9px; letter-spacing:1px;
+            padding:2px 7px; border:1px solid rgba(0,212,255,0.3);
+            background:transparent; color:var(--text-dim); cursor:pointer;
+            clip-path:polygon(0 0,calc(100% - 4px) 0,100% 4px,100% 100%,0 100%);
+            flex-shrink:0; transition:all 0.12s;
+        `;
+        copyBtn.textContent = '⧉';
+        copyBtn.title = 'Copy system name';
+        copyBtn.onmouseenter = () => { copyBtn.style.color = 'var(--ed-cyan)'; copyBtn.style.borderColor = 'var(--ed-cyan)'; };
+        copyBtn.onmouseleave = () => { copyBtn.style.color = 'var(--text-dim)'; copyBtn.style.borderColor = 'rgba(0,212,255,0.3)'; };
+        copyBtn.addEventListener('click', () => navigator.clipboard.writeText(name).then(() => toast('◈ Copied: ' + name)));
+        if (isLast) {
+            const finalBadge = document.createElement('span');
+            finalBadge.style.cssText = 'font-family:var(--font-mono);font-size:9px;color:#00FF88;letter-spacing:1px;flex-shrink:0';
+            finalBadge.textContent = 'FINAL';
+            nameCell.append(nameSpan, finalBadge, copyBtn);
+        } else {
+            nameCell.append(nameSpan, copyBtn);
+        }
+
+        // Jumps cell
+        const jumpsCell = document.createElement('div');
+        jumpsCell.style.cssText = 'font-family:var(--font-mono);font-size:13px;color:var(--text-primary);text-align:right';
+        jumpsCell.textContent = jumps;
+
+        // Distance cell
+        const distCell = document.createElement('div');
+        distCell.style.cssText = 'font-family:var(--font-mono);font-size:13px;color:var(--text-primary);text-align:right';
+        distCell.textContent = dist;
+
+        row.append(checkCell, nameCell, jumpsCell, distCell);
+        frag.appendChild(row);
+    });
+    list.replaceChildren(frag);
+}
+
+function tpToggle(i) { tpDone[i] = !tpDone[i]; tpRender(); }
+
+function tpClear() {
+    tpRoute = []; tpDone = [];
+    document.getElementById('tp-route-list').innerHTML = '';
+    document.getElementById('tp-summary').style.display = 'none';
+    document.getElementById('tp-clear-btn').style.display = 'none';
+    document.getElementById('tp-prog-wrap').style.display = 'none';
+    document.getElementById('tp-status').textContent = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOOKMARK PICKER for Tourist Planner
+// ══════════════════════════════════════════════════════════════════
+function openBmPickModal() {
+    document.getElementById('bm-pick-search').value = '';
+    renderBmPicker();
+    document.getElementById('bm-pick-modal').classList.add('open');
+}
+function closeBmPickModal() {
+    document.getElementById('bm-pick-modal').classList.remove('open');
+}
+function renderBmPicker() {
+    const q    = (document.getElementById('bm-pick-search').value || '').toLowerCase();
+    const list = document.getElementById('bm-pick-list');
+    const filtered = gBm.filter(b =>
+        !q ||
+        b.system.toLowerCase().includes(q) ||
+        (b.notes || '').toLowerCase().includes(q) ||
+        (b.tags  || []).some(t => t.toLowerCase().includes(q))
+    );
+    if (filtered.length === 0) {
+        list.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-txt">${gBm.length === 0 ? 'No bookmarks saved yet.' : 'No bookmarks match.'}</div></div>`;
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    filtered.forEach(b => {
+        const already = tpStops.some(s => s.toLowerCase() === b.system.toLowerCase());
+        const item = document.createElement('div');
+        item.className = 'bm-pick-item' + (already ? ' done-row' : '');
+        const tagsHtml = (b.tags && b.tags.length)
+            ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${b.tags.map(t => `<span class="tag" style="font-size:9px;padding:1px 5px">${t}</span>`).join('')}</div>`
+            : '';
+        item.innerHTML =
+            `<div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span class="bm-pick-sys">${b.system}</span>
+                    <span class="bm-pick-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type || ''}</span>
+                </div>
+                ${tagsHtml}
+            </div>` +
+            (already
+                ? `<span style="font-family:var(--font-mono);font-size:10px;color:#00FF88;white-space:nowrap;flex-shrink:0">✓ In list</span>`
+                : `<button class="btn btn-c btn-sm add-bm-btn" style="font-size:9px;padding:3px 10px;flex-shrink:0">+ Add</button>`);
+        if (!already) {
+            item.querySelector('.add-bm-btn').addEventListener('click', () => tpAddFromBookmark(b.system));
+        }
+        frag.appendChild(item);
+    });
+    list.replaceChildren(frag);
+}
+function tpAddFromBookmark(sysName) {
+    if (tpStops.length >= 20) { toast('Maximum 20 systems'); return; }
+    if (tpStops.some(s => s.toLowerCase() === sysName.toLowerCase())) { toast(sysName + ' already in list'); return; }
+    tpStops.push(sysName);
+    tpRenderStops();
+    renderBmPicker();
+    toast('+ Added ' + sysName);
+}
+document.getElementById('bm-pick-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeBmPickModal(); });
+
+// ── Extend initApp to load body notes ────────────────────────────────────────
+const _origInitApp = initApp;
+
+// Patch: load gBn after init (we hook into the existing updateDash/updateBadges)
+(async () => {
+    // Wait until api is available
+    const _waitForBn = setInterval(async () => {
+        if (window.api && window.api.getBodyNotes) {
+            clearInterval(_waitForBn);
+            gBn = await window.api.getBodyNotes();
+            updateBnBadge();
+        }
+    }, 200);
+})();
+
+// ── Extend navigation to handle new views ────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+        const v = el.dataset.view;
+        if (v === 'bodynotes') renderBn();
+        if (v === 'spansh') initSpanshView();
+    });
+});
+
+// Modal backdrop closes
+document.getElementById('bn-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeBnModal(); });
+
 </script>
 </body>
 </html>

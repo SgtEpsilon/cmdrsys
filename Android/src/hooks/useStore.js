@@ -4,8 +4,9 @@ import {
   getBookmarks, saveBookmarks,
   getVisited, saveVisited,
   getSettings, saveSettings,
+  getBodyNotes, saveBodyNotes,
 } from '../utils/storage.js';
-import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop } from '../utils/syncService.js';
+import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop, deleteBodyNoteOnDesktop } from '../utils/syncService.js';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
@@ -23,11 +24,12 @@ function normaliseBm(b) {
 const AUTO_SYNC_INTERVAL = 30_000;
 
 export function useStore() {
-  const [logs,      setLogsState]     = useState([]);
-  const [bookmarks, setBookmarksState] = useState([]);
-  const [visited,   setVisitedState]   = useState([]);
-  const [settings,  setSettingsState]  = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
-  const [ready,     setReady]          = useState(false);
+  const [logs,       setLogsState]      = useState([]);
+  const [bookmarks,  setBookmarksState]  = useState([]);
+  const [visited,    setVisitedState]    = useState([]);
+  const [settings,   setSettingsState]   = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
+  const [bodyNotes,  setBodyNotesState]  = useState([]);
+  const [ready,      setReady]           = useState(false);
 
   // Sync state
   const [syncStatus,    setSyncStatus]    = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'error'
@@ -37,18 +39,21 @@ export function useStore() {
   // Refs to avoid stale closures inside the interval
   const bookmarksRef = useRef([]);
   const logsRef      = useRef([]);
+  const bodyNotesRef = useRef([]);
   bookmarksRef.current = bookmarks;
   logsRef.current      = logs;
+  bodyNotesRef.current = bodyNotes;
 
   // Load all data on mount
   useEffect(() => {
     (async () => {
       try {
-        const [l, b, v, s] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings()]);
+        const [l, b, v, s, bn] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes()]);
         setLogsState(l);
         setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
+        setBodyNotesState(bn || []);
       } catch (e) {
         console.error('useStore: load error', e);
       } finally {
@@ -70,7 +75,7 @@ export function useStore() {
       setSyncStatus('syncing');
       setSyncError('');
       try {
-        const result = await fullSync(bookmarksRef.current, logsRef.current);
+        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current);
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
@@ -78,6 +83,9 @@ export function useStore() {
 
         await saveLogs(result.logs);
         setLogsState(result.logs);
+
+        await saveBodyNotes(result.bodyNotes);
+        setBodyNotesState(result.bodyNotes);
 
         // Optionally pull CMDR/ship/system from desktop if still unknown
         const ds = result.settingsFromDesktop;
@@ -115,13 +123,16 @@ export function useStore() {
     setSyncStatus('syncing');
     setSyncError('');
     try {
-      const result = await fullSync(bookmarksRef.current, logsRef.current);
+      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current);
 
       await saveBookmarks(result.bookmarks);
       setBookmarksState(result.bookmarks.map(normaliseBm));
 
       await saveLogs(result.logs);
       setLogsState(result.logs);
+
+      await saveBodyNotes(result.bodyNotes);
+      setBodyNotesState(result.bodyNotes);
 
       const ds = result.settingsFromDesktop;
       if (ds) {
@@ -137,7 +148,7 @@ export function useStore() {
 
       setSyncStatus('ok');
       setLastSyncTime(Date.now());
-      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length };
+      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length, bodyNotes: result.bodyNotes.length };
     } catch (e) {
       setSyncStatus('error');
       setSyncError(e.message);
@@ -187,6 +198,28 @@ export function useStore() {
     });
     // Best-effort — propagate deletion to desktop if sync is configured
     deleteBookmarkOnDesktop(id);
+  }, []);
+
+  // ── Body Notes ───────────────────────────────────────────────────────────────
+  const upsertBodyNote = useCallback(async (note) => {
+    setBodyNotesState(prev => {
+      const idx = prev.findIndex(n => n.id === note.id);
+      const next = idx >= 0
+        ? prev.map(n => n.id === note.id ? note : n)
+        : [note, ...prev];
+      saveBodyNotes(next);
+      return next;
+    });
+  }, []);
+
+  const deleteBodyNote = useCallback(async (id) => {
+    setBodyNotesState(prev => {
+      const next = prev.filter(n => n.id !== id);
+      saveBodyNotes(next);
+      return next;
+    });
+    // Best-effort — propagate deletion to desktop if sync is configured
+    deleteBodyNoteOnDesktop(id);
   }, []);
 
   // ── Visited ──────────────────────────────────────────────────────────────────
@@ -247,6 +280,7 @@ export function useStore() {
     ready,
     logs, upsertLog, deleteLog,
     bookmarks, upsertBookmark, deleteBookmark,
+    bodyNotes, upsertBodyNote, deleteBodyNote,
     visited, clearVisited,
     settings, updateSettings,
     exportData, importData,

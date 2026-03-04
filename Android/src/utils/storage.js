@@ -70,3 +70,10 @@ export async function getSettings() {
 export async function saveSettings(settings) {
   return storage.set('settings', settings);
 }
+
+export async function getBodyNotes() {
+  return (await storage.get('body_notes')) || [];
+}
+export async function saveBodyNotes(notes) {
+  return storage.set('body_notes', notes);
+}
