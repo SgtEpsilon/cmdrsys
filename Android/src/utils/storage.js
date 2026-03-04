@@ -77,3 +77,10 @@ export async function getBodyNotes() {
 export async function saveBodyNotes(notes) {
   return storage.set('body_notes', notes);
 }
+
+export async function getDeletedItems() {
+  return (await storage.get('deleted_items')) || [];
+}
+export async function saveDeletedItems(items) {
+  return storage.set('deleted_items', items);
+}

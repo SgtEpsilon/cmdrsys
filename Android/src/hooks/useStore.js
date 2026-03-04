@@ -5,6 +5,7 @@ import {
   getVisited, saveVisited,
   getSettings, saveSettings,
   getBodyNotes, saveBodyNotes,
+  getDeletedItems, saveDeletedItems,
 } from '../utils/storage.js';
 import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop, deleteBodyNoteOnDesktop } from '../utils/syncService.js';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -29,6 +30,7 @@ export function useStore() {
   const [visited,    setVisitedState]    = useState([]);
   const [settings,   setSettingsState]   = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
   const [bodyNotes,  setBodyNotesState]  = useState([]);
+  const [deletedItems, setDeletedItemsState] = useState([]);
   const [ready,      setReady]           = useState(false);
 
   // Sync state
@@ -40,20 +42,23 @@ export function useStore() {
   const bookmarksRef = useRef([]);
   const logsRef      = useRef([]);
   const bodyNotesRef = useRef([]);
+  const deletedItemsRef = useRef([]);
   bookmarksRef.current = bookmarks;
   logsRef.current      = logs;
   bodyNotesRef.current = bodyNotes;
+  deletedItemsRef.current = deletedItems;
 
   // Load all data on mount
   useEffect(() => {
     (async () => {
       try {
-        const [l, b, v, s, bn] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes()]);
+        const [l, b, v, s, bn, di] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes(), getDeletedItems()]);
         setLogsState(l);
         setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
         setBodyNotesState(bn || []);
+        setDeletedItemsState(di || []);
       } catch (e) {
         console.error('useStore: load error', e);
       } finally {
@@ -75,7 +80,7 @@ export function useStore() {
       setSyncStatus('syncing');
       setSyncError('');
       try {
-        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current);
+        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current);
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
@@ -86,6 +91,12 @@ export function useStore() {
 
         await saveBodyNotes(result.bodyNotes);
         setBodyNotesState(result.bodyNotes);
+
+        // Persist merged tombstone list (keeps deletions durable across restarts)
+        if (result.deletedItems) {
+          await saveDeletedItems(result.deletedItems);
+          setDeletedItemsState(result.deletedItems);
+        }
 
         // Optionally pull CMDR/ship/system from desktop if still unknown
         const ds = result.settingsFromDesktop;
@@ -123,7 +134,7 @@ export function useStore() {
     setSyncStatus('syncing');
     setSyncError('');
     try {
-      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current);
+      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current);
 
       await saveBookmarks(result.bookmarks);
       setBookmarksState(result.bookmarks.map(normaliseBm));
@@ -133,6 +144,11 @@ export function useStore() {
 
       await saveBodyNotes(result.bodyNotes);
       setBodyNotesState(result.bodyNotes);
+
+      if (result.deletedItems) {
+        await saveDeletedItems(result.deletedItems);
+        setDeletedItemsState(result.deletedItems);
+      }
 
       const ds = result.settingsFromDesktop;
       if (ds) {
@@ -174,6 +190,13 @@ export function useStore() {
       saveLogs(next);
       return next;
     });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'log', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'log')), tombstone];
+      saveDeletedItems(next);
+      return next;
+    });
     // Best-effort — propagate deletion to desktop if sync is configured
     deleteLogOnDesktop(id);
   }, []);
@@ -196,6 +219,13 @@ export function useStore() {
       saveBookmarks(next);
       return next;
     });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'bookmark', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'bookmark')), tombstone];
+      saveDeletedItems(next);
+      return next;
+    });
     // Best-effort — propagate deletion to desktop if sync is configured
     deleteBookmarkOnDesktop(id);
   }, []);
@@ -216,6 +246,13 @@ export function useStore() {
     setBodyNotesState(prev => {
       const next = prev.filter(n => n.id !== id);
       saveBodyNotes(next);
+      return next;
+    });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'body_note', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'body_note')), tombstone];
+      saveDeletedItems(next);
       return next;
     });
     // Best-effort — propagate deletion to desktop if sync is configured

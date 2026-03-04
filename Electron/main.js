@@ -72,6 +72,12 @@ async function initDB() {
             tags        TEXT DEFAULT '[]',
             coords      TEXT DEFAULT '[]'
         );
+        CREATE TABLE IF NOT EXISTS deleted_items (
+            id         TEXT NOT NULL,
+            type       TEXT NOT NULL,
+            deleted_at INTEGER NOT NULL,
+            PRIMARY KEY (id, type)
+        );
     `);
 
     // Migration: rename x/y columns to lat/lon if they still exist from an older DB
@@ -125,6 +131,42 @@ function queryAll(sql, params = []) {
     return rows;
 }
 function queryGet(sql, params = []) { return queryAll(sql, params)[0] || null; }
+
+// ─── Tombstone helpers ────────────────────────────────────────────────────────
+function recordTombstone(id, type) {
+    db.run(
+        'INSERT OR REPLACE INTO deleted_items (id, type, deleted_at) VALUES (?, ?, ?)',
+        [id, type, Date.now()]
+    );
+}
+
+function getTombstones() {
+    return queryAll('SELECT id, type, deleted_at FROM deleted_items');
+}
+
+// Apply a list of tombstones received from Android: delete matching live rows
+function applyTombstones(tombstones) {
+    if (!Array.isArray(tombstones)) return false;
+    let changed = false;
+    for (const { id, type, deleted_at } of tombstones) {
+        // Record locally so we don't re-push the item later
+        db.run(
+            'INSERT OR REPLACE INTO deleted_items (id, type, deleted_at) VALUES (?, ?, ?)',
+            [id, type, deleted_at ?? Date.now()]
+        );
+        if (type === 'bookmark') {
+            const exists = queryGet('SELECT id FROM bookmarks WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM bookmarks WHERE id = ?', [id]); changed = true; }
+        } else if (type === 'log') {
+            const exists = queryGet('SELECT id FROM logs WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM logs WHERE id = ?', [id]); changed = true; }
+        } else if (type === 'body_note') {
+            const exists = queryGet('SELECT id FROM body_notes WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM body_notes WHERE id = ?', [id]); changed = true; }
+        }
+    }
+    return changed;
+}
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function getSetting(key, def = '') {
@@ -350,6 +392,7 @@ function startSyncServer() {
                         ship:   getSetting('ship'),
                         system: getSetting('system'),
                     },
+                    deleted_items: getTombstones(),
                     ts: Date.now(),
                     schema_version: 2,   // v2 uses lat/lon instead of x/y
                 };
@@ -387,10 +430,16 @@ function startSyncServer() {
                     const data = JSON.parse(body);
                     let changed = false;
 
+                    // Apply tombstones FIRST — removes items deleted on Android
+                    // before we merge live data so they don't get resurrected
+                    if (applyTombstones(data.deleted_items)) changed = true;
+
                     // Merge bookmarks — last ts wins per id
                     // Accept both legacy {x,y} and new {lat,lon} field names from Android
                     if (Array.isArray(data.bookmarks)) {
                         data.bookmarks.forEach(b => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [b.id, 'bookmark']);
+                            if (tombstone) return; // deleted — don't resurrect
                             const existing = queryGet('SELECT ts FROM bookmarks WHERE id = ?', [b.id]);
                             if (!existing || existing.ts < b.ts) {
                                 const lat = b.lat ?? b.x ?? null;
@@ -411,6 +460,8 @@ function startSyncServer() {
                     // Merge logs — last ts wins per id
                     if (Array.isArray(data.logs)) {
                         data.logs.forEach(l => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [l.id, 'log']);
+                            if (tombstone) return; // deleted — don't resurrect
                             const existing = queryGet('SELECT ts FROM logs WHERE id = ?', [l.id]);
                             if (!existing || existing.ts < l.ts) {
                                 db.run(
@@ -428,6 +479,8 @@ function startSyncServer() {
                     // Merge body_notes — last ts wins per id
                     if (Array.isArray(data.body_notes)) {
                         data.body_notes.forEach(n => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [n.id, 'body_note']);
+                            if (tombstone) return; // deleted — don't resurrect
                             const existing = queryGet('SELECT ts FROM body_notes WHERE id = ?', [n.id]);
                             if (!existing || existing.ts < n.ts) {
                                 db.run(
@@ -473,6 +526,7 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/bookmark/'.length));
             try {
                 db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+                recordTombstone(id, 'bookmark');
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -487,6 +541,7 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/log/'.length));
             try {
                 db.run('DELETE FROM logs WHERE id = ?', [id]);
+                recordTombstone(id, 'log');
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -501,6 +556,7 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/body-note/'.length));
             try {
                 db.run('DELETE FROM body_notes WHERE id = ?', [id]);
+                recordTombstone(id, 'body_note');
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -624,6 +680,7 @@ ipcMain.handle('logs:save', (_, e) => {
 });
 ipcMain.handle('logs:delete', (_, id) => {
     db.run('DELETE FROM logs WHERE id = ?', [id]);
+    recordTombstone(id, 'log');
     saveDB(); return true;
 });
 
@@ -639,6 +696,7 @@ ipcMain.handle('bookmarks:save', (_, b) => {
 });
 ipcMain.handle('bookmarks:delete', (_, id) => {
     db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+    recordTombstone(id, 'bookmark');
     saveDB(); return true;
 });
 
@@ -799,6 +857,7 @@ ipcMain.handle('bodynotes:save', (_, n) => {
 
 ipcMain.handle('bodynotes:delete', (_, id) => {
     db.run('DELETE FROM body_notes WHERE id=?', [id]);
+    recordTombstone(id, 'body_note');
     saveDB();
     return true;
 });
