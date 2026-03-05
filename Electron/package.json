@@ -1,6 +1,6 @@
 {
   "name": "cmdrsys",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Elite Dangerous CMDR Navigation Interface",
   "main": "main.js",
   "scripts": {

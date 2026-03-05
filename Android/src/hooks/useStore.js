@@ -45,10 +45,12 @@ export function useStore() {
   const logsRef      = useRef([]);
   const bodyNotesRef = useRef([]);
   const deletedItemsRef = useRef([]);
+  const foldersRef   = useRef([]);
   bookmarksRef.current = bookmarks;
   logsRef.current      = logs;
   bodyNotesRef.current = bodyNotes;
   deletedItemsRef.current = deletedItems;
+  foldersRef.current   = folders;
 
   // Load all data on mount
   useEffect(() => {
@@ -84,7 +86,7 @@ export function useStore() {
       setSyncStatus('syncing');
       setSyncError('');
       try {
-        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current);
+        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, foldersRef.current);
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
@@ -100,6 +102,12 @@ export function useStore() {
         if (result.deletedItems) {
           await saveDeletedItems(result.deletedItems);
           setDeletedItemsState(result.deletedItems);
+        }
+
+        // Sync folders
+        if (result.folders) {
+          await saveFolders(result.folders);
+          setFoldersState(result.folders);
         }
 
         // Optionally pull CMDR/ship/system from desktop if still unknown
@@ -138,7 +146,7 @@ export function useStore() {
     setSyncStatus('syncing');
     setSyncError('');
     try {
-      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current);
+      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, foldersRef.current);
 
       await saveBookmarks(result.bookmarks);
       setBookmarksState(result.bookmarks.map(normaliseBm));
@@ -152,6 +160,12 @@ export function useStore() {
       if (result.deletedItems) {
         await saveDeletedItems(result.deletedItems);
         setDeletedItemsState(result.deletedItems);
+      }
+
+      // Sync folders
+      if (result.folders) {
+        await saveFolders(result.folders);
+        setFoldersState(result.folders);
       }
 
       const ds = result.settingsFromDesktop;
@@ -265,11 +279,12 @@ export function useStore() {
 
   // ── Folders ──────────────────────────────────────────────────────────────────
   const upsertFolder = useCallback(async (folder) => {
+    const stamped = { ...folder, ts: Date.now() };
     setFoldersState(prev => {
-      const idx = prev.findIndex(f => f.id === folder.id);
+      const idx = prev.findIndex(f => f.id === stamped.id);
       const next = idx >= 0
-        ? prev.map(f => f.id === folder.id ? folder : f)
-        : [...prev, folder];
+        ? prev.map(f => f.id === stamped.id ? stamped : f)
+        : [...prev, stamped];
       saveFolders(next);
       return next;
     });

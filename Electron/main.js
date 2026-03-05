@@ -78,6 +78,11 @@ async function initDB() {
             deleted_at INTEGER NOT NULL,
             PRIMARY KEY (id, type)
         );
+        CREATE TABLE IF NOT EXISTS folders (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            ts         INTEGER NOT NULL DEFAULT 0
+        );
     `);
 
     // Migration: rename x/y columns to lat/lon if they still exist from an older DB
@@ -410,6 +415,7 @@ function startSyncServer() {
                         ship:   getSetting('ship'),
                         system: getSetting('system'),
                     },
+                    folders: queryAll('SELECT * FROM folders ORDER BY name ASC'),
                     deleted_items: getTombstones(),
                     ts: Date.now(),
                     schema_version: 2,   // v2 uses lat/lon instead of x/y
@@ -511,6 +517,20 @@ function startSyncServer() {
                                      n.landable ? 1 : 0, n.bio_signals ?? 0, n.geo_signals ?? 0,
                                      n.terraform || null, n.distance_ls ?? null, n.value ?? 0,
                                      n.notes || '', JSON.stringify(n.tags || []), JSON.stringify(n.coords || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    // Merge folders — last ts wins per id
+                    if (Array.isArray(data.folders)) {
+                        data.folders.forEach(f => {
+                            const existing = queryGet('SELECT ts FROM folders WHERE id = ?', [f.id]);
+                            if (!existing || (existing.ts ?? 0) < (f.ts ?? 0)) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO folders (id, name, ts) VALUES (?, ?, ?)`,
+                                    [f.id, f.name, f.ts ?? 0]
                                 );
                                 changed = true;
                             }
@@ -892,5 +912,19 @@ ipcMain.handle('bodynotes:reorder', (_, orderedIds) => {
     orderedIds.forEach((id, i) => {
         db.run('UPDATE body_notes SET sort_order = ? WHERE id = ?', [i, id]);
     });
+    saveDB(); return true;
+});
+
+// ── Folders IPC ───────────────────────────────────────────────────────────────
+ipcMain.handle('folders:getAll', () =>
+    queryAll('SELECT * FROM folders ORDER BY name ASC')
+);
+ipcMain.handle('folders:save', (_, f) => {
+    db.run(`INSERT OR REPLACE INTO folders (id, name, ts) VALUES (?, ?, ?)`,
+        [f.id, f.name, f.ts ?? Date.now()]);
+    saveDB(); return true;
+});
+ipcMain.handle('folders:delete', (_, id) => {
+    db.run('DELETE FROM folders WHERE id = ?', [id]);
     saveDB(); return true;
 });

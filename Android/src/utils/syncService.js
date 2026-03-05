@@ -121,7 +121,7 @@ export async function pullFromDesktop() {
   return data;
 }
 
-export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems) {
+export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems, folders) {
   const { url, token } = await getSyncConfig();
   if (!url) throw new Error('No sync URL configured');
   const res = await fetchWithRetry(`${url}/sync`, {
@@ -132,6 +132,7 @@ export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems) {
       logs,
       body_notes:    bodyNotes || [],
       deleted_items: deletedItems || [],
+      folders:       folders || [],
     }),
   });
   if (res.status === 401) throw new Error('Sync token mismatch — check token in Settings');
@@ -169,7 +170,7 @@ export async function deleteBodyNoteOnDesktop(id) {
   } catch (_) { /* non-fatal */ }
 }
 
-export async function fullSync(localBookmarks, localLogs, localBodyNotes, localDeletedItems) {
+export async function fullSync(localBookmarks, localLogs, localBodyNotes, localDeletedItems, localFolders) {
   const remote = await pullFromDesktop();
 
   // Build a set of all tombstoned IDs (local + remote) for each type
@@ -205,13 +206,22 @@ export async function fullSync(localBookmarks, localLogs, localBodyNotes, localD
   for (const id of deletedSet.body_note) bnMap.delete(id);
   const mergedBodyNotes = [...bnMap.values()].sort((a, b) => b.ts - a.ts);
 
+  // Merge folders — last-write wins per id (folders have no tombstones for now)
+  const folderMap = new Map((localFolders || []).map(f => [f.id, f]));
+  for (const rf of (remote.folders || [])) {
+    const local = folderMap.get(rf.id);
+    if (!local || (local.ts ?? 0) < (rf.ts ?? 0)) folderMap.set(rf.id, rf);
+  }
+  const mergedFolders = [...folderMap.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
   // Push merged data + all tombstones so Electron stays in sync
-  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes, allDeleted);
+  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes, allDeleted, mergedFolders);
 
   return {
     bookmarks:           mergedBookmarks,
     logs:                mergedLogs,
     bodyNotes:           mergedBodyNotes,
+    folders:             mergedFolders,
     settingsFromDesktop: remote.settings || {},
     schemaVersion:       remote.schema_version ?? 1,
     // Return merged tombstone list so the caller can persist it locally
