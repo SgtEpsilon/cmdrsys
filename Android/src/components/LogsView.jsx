@@ -4,30 +4,41 @@ import { edDate } from '../utils/edDate.js';
 
 const EMPTY_FORM = { title: '', system: '', body: '', content: '', tags: '' };
 
+const SORT_OPTIONS = [
+  { value: 'date_desc', label: 'Newest First' },
+  { value: 'date_asc',  label: 'Oldest First' },
+  { value: 'system',    label: 'System A-Z' },
+  { value: 'title',     label: 'Title A-Z' },
+];
+
 export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) {
   const [query,     setQuery]     = useState('');
   const [tagFilter, setTagFilter] = useState('');
+  const [sortBy,    setSortBy]    = useState('date_desc');
   const [modal,     setModal]     = useState(false);
   const [editing,   setEditing]   = useState(null);
   const [form,      setForm]      = useState(EMPTY_FORM);
   const [viewModal, setViewModal] = useState(null);
 
-  // Separate text search from tag filter
   const filtered = useMemo(() => {
     const q   = query.toLowerCase();
     const tag = tagFilter.toLowerCase().trim();
-    return [...logs]
-      .sort((a, b) => b.ts - a.ts)
-      .filter(l => {
-        const textMatch = !q || (
-          l.title.toLowerCase().includes(q) ||
-          (l.system || '').toLowerCase().includes(q) ||
-          l.content.toLowerCase().includes(q)
-        );
-        const tagMatch = !tag || (l.tags || []).some(t => t.toLowerCase().includes(tag));
-        return textMatch && tagMatch;
-      });
-  }, [logs, query, tagFilter]);
+    let list = logs.filter(l => {
+      const textMatch = !q || (
+        l.title.toLowerCase().includes(q) ||
+        (l.system || '').toLowerCase().includes(q) ||
+        l.content.toLowerCase().includes(q)
+      );
+      const tagMatch = !tag || (l.tags || []).some(t => t.toLowerCase().includes(tag));
+      return textMatch && tagMatch;
+    });
+
+    if (sortBy === 'date_desc') list = [...list].sort((a, b) => b.ts - a.ts);
+    else if (sortBy === 'date_asc')  list = [...list].sort((a, b) => a.ts - b.ts);
+    else if (sortBy === 'system')    list = [...list].sort((a, b) => (a.system || '').localeCompare(b.system || ''));
+    else if (sortBy === 'title')     list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    return list;
+  }, [logs, query, tagFilter, sortBy]);
 
   function openNew() {
     setEditing(null);
@@ -83,33 +94,37 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
           <div style={{ fontFamily: 'var(--font-hud)', fontSize: '16px', color: 'var(--ed-orange)', letterSpacing: '4px' }}>Commander's Log</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '2px', marginTop: '3px' }}>Personal mission log</div>
         </div>
-        <Btn onClick={openNew} small>+ New Entry</Btn>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {currentSystem && (
+            <Btn onClick={() => { setEditing(null); setForm({ ...EMPTY_FORM, system: currentSystem }); setModal(true); }} variant="green" small>
+              ⚡ {currentSystem.length > 10 ? currentSystem.slice(0, 10) + '…' : currentSystem}
+            </Btn>
+          )}
+          <Btn onClick={openNew} small>+ New Entry</Btn>
+        </div>
       </div>
 
       {/* Text search */}
       <SearchBar value={query} onChange={e => setQuery(e.target.value)} placeholder="SEARCH LOG ENTRIES..." />
 
-      {/* Tag filter */}
-      <div style={{ marginBottom: '14px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+      {/* Sort + Tag filter row */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          style={{ background: '#050e18', border: '1px solid var(--border-c)', color: 'var(--ed-cyan)', fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '9px 10px', outline: 'none', flexShrink: 0 }}>
+          {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <div style={{ flex: 1 }}>
           <input
             type="search"
             value={tagFilter}
             onChange={e => setTagFilter(e.target.value)}
             placeholder="FILTER BY TAG..."
-            style={{
-              width: '100%', background: 'rgba(0,0,0,0.4)',
-              border: '1px solid var(--border-c)', color: 'var(--text-primary)',
-              fontFamily: 'var(--font-mono)', fontSize: '13px',
-              padding: '10px 14px', outline: 'none',
-            }}
+            style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-c)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '13px', padding: '10px 14px', outline: 'none' }}
             onFocus={e => e.target.style.borderColor = 'var(--ed-cyan)'}
             onBlur={e  => e.target.style.borderColor = 'var(--border-c)'}
           />
         </div>
-        {tagFilter && (
-          <Btn onClick={() => setTagFilter('')} variant="red" small>✕</Btn>
-        )}
+        {tagFilter && <Btn onClick={() => setTagFilter('')} variant="red" small>X</Btn>}
       </div>
 
       {/* List */}

@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
     getBookmarks:   ()   => ipcRenderer.invoke('bookmarks:getAll'),
     saveBookmark:   (bm) => ipcRenderer.invoke('bookmarks:save', bm),
     deleteBookmark: (id) => ipcRenderer.invoke('bookmarks:delete', id),
+    reorderBookmarks: (ids) => ipcRenderer.invoke('bookmarks:reorder', ids),
 
     // Visited systems
     getVisited:   ()          => ipcRenderer.invoke('visited:getAll'),
@@ -53,6 +54,7 @@ contextBridge.exposeInMainWorld('api', {
     getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
     saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
     deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    reorderBodyNotes: (ids) => ipcRenderer.invoke('bodynotes:reorder', ids),
     // Open URL in system browser
     openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 

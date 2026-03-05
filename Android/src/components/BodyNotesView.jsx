@@ -58,12 +58,13 @@ const BN_TYPE_ICONS = {
 const EMPTY_FORM = {
   system: '', body_name: '', body_type: '', atmo_type: '', terraform: '',
   gravity: '', distance_ls: '', bio_signals: '0', geo_signals: '0',
-  value: '0', landable: false, notes: '', tags: '',
+  value: '0', landable: false, notes: '', tags: '', folder: '',
 };
 
-export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNote, currentSystem }) {
+export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNote, currentSystem, folders }) {
   const [query,      setQuery]      = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
   const [landFilter, setLandFilter] = useState('');
   const [modal,      setModal]      = useState(false);
   const [viewModal,  setViewModal]  = useState(null); // note object for detail view
@@ -81,9 +82,10 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
       );
       const bm = !typeFilter || (n.body_type || '').includes(typeFilter);
       const lm = landFilter === '' ? true : (landFilter === '1' ? !!n.landable : !n.landable);
-      return tm && bm && lm;
+      const fm = !folderFilter || n.folder === folderFilter;
+      return tm && bm && lm && fm;
     });
-  }, [bodyNotes, query, typeFilter, landFilter]);
+  }, [bodyNotes, query, typeFilter, landFilter, folderFilter]);
 
   function openNew() {
     setEditing(null);
@@ -108,6 +110,7 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
       landable:    !!n.landable,
       notes:       n.notes || '',
       tags:        (n.tags || []).join(', '),
+      folder:      n.folder || '',
     });
     setCoords(JSON.parse(JSON.stringify(n.coords || [])));
     setModal(true);
@@ -156,6 +159,7 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
       notes:       form.notes.trim(),
       tags:        form.tags.split(',').map(t => t.trim()).filter(Boolean),
       coords:      validCoords,
+      folder:      form.folder || '',
     };
     await upsertBodyNote(note);
     setModal(false);
@@ -183,7 +187,7 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
       <SearchBar value={query} onChange={e => setQuery(e.target.value)} placeholder="SEARCH BODIES..." />
 
       {/* Filters */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
         <select
           value={typeFilter}
           onChange={e => setTypeFilter(e.target.value)}
@@ -219,6 +223,16 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
           <option value="0">NOT LANDABLE</option>
         </select>
       </div>
+      {(folders || []).length > 0 && (
+        <select
+          value={folderFilter}
+          onChange={e => setFolderFilter(e.target.value)}
+          style={{ width: '100%', background: '#050e18', border: '1px solid var(--border-c)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '9px 10px', outline: 'none', marginBottom: '14px' }}
+        >
+          <option value="">ALL FOLDERS</option>
+          {(folders || []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      )}
 
       {/* Cards */}
       {filtered.length === 0
@@ -371,6 +385,21 @@ export default function BodyNotesView({ bodyNotes, upsertBodyNote, deleteBodyNot
 
         <FormTextarea label="Notes" value={form.notes} onChange={set('notes')} placeholder="Observations, materials found..." rows={3} />
         <FormInput    label="Tags (comma separated)" value={form.tags} onChange={set('tags')} placeholder="first-footfall, guardian..." />
+        {(folders || []).length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>
+              Folder / Category
+            </label>
+            <select
+              value={form.folder}
+              onChange={set('folder')}
+              style={{ width: '100%', background: '#050e18', border: '1px solid var(--border-c)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '15px', padding: '10px 12px', outline: 'none' }}
+            >
+              <option value="">-- No Folder --</option>
+              {(folders || []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+        )}
 
         {/* Surface coordinates */}
         <div style={{ marginBottom: '12px' }}>

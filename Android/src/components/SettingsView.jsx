@@ -2,11 +2,98 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Btn, Panel, FormInput } from './UI.jsx';
 import { getSyncConfig, setSyncConfig, pingDesktop } from '../utils/syncService.js';
 
+// ── Folder Manager ────────────────────────────────────────────────────────────
+function FolderManager({ folders, upsertFolder, deleteFolder }) {
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+
+  function handleAdd() {
+    const name = newName.trim();
+    if (!name) return;
+    upsertFolder({ id: String(Date.now()), name });
+    setNewName('');
+  }
+
+  function startEdit(f) {
+    setEditingId(f.id);
+    setEditName(f.name);
+  }
+
+  function handleRename(id) {
+    const name = editName.trim();
+    if (!name) return;
+    const folder = folders.find(f => f.id === id);
+    if (folder) upsertFolder({ ...folder, name });
+    setEditingId(null);
+  }
+
+  return (
+    <Panel title="Folder Management">
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.8, marginBottom: '12px' }}>
+        Create folders to organise bookmarks and body notes by expedition or region.
+      </div>
+      {/* Add new folder */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="New folder name..."
+          style={{ flex: 1, background: 'rgba(0,0,0,0.45)', border: '1px solid var(--border-c)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '14px', padding: '9px 12px', outline: 'none' }}
+          onFocus={e => e.target.style.borderColor = 'var(--ed-orange)'}
+          onBlur={e  => e.target.style.borderColor = 'var(--border-c)'}
+        />
+        <Btn onClick={handleAdd} variant="orange" small disabled={!newName.trim()}>+ Add</Btn>
+      </div>
+
+      {/* Folder list */}
+      {folders.length === 0 ? (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)', textAlign: 'center', padding: '16px 0' }}>
+          No folders yet
+        </div>
+      ) : folders.map(f => (
+        <div key={f.id} style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '9px 10px', marginBottom: '6px',
+          border: '1px solid var(--border-c)',
+          background: 'rgba(5,14,24,0.6)',
+        }}>
+          <span style={{ color: 'var(--ed-orange)', fontSize: '12px', marginRight: '2px' }}>▸</span>
+          {editingId === f.id ? (
+            <>
+              <input
+                type="text"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleRename(f.id); if (e.key === 'Escape') setEditingId(null); }}
+                autoFocus
+                style={{ flex: 1, background: 'rgba(0,0,0,0.45)', border: '1px solid var(--ed-orange)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: '13px', padding: '5px 8px', outline: 'none' }}
+              />
+              <Btn onClick={() => handleRename(f.id)} variant="orange" small>Save</Btn>
+              <Btn onClick={() => setEditingId(null)} variant="red" small>X</Btn>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)' }}>{f.name}</span>
+              <Btn onClick={() => startEdit(f)} variant="cyan" small>Rename</Btn>
+              <Btn onClick={() => { if (window.confirm(`Delete folder "${f.name}"?`)) deleteFolder(f.id); }} variant="red" small>Del</Btn>
+            </>
+          )}
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
+
 export default function SettingsView({
   settings, updateSettings,
   logs, bookmarks, visited,
   exportData, importData, onJournalImport,
   syncStatus, syncError, lastSyncTime, triggerSync,
+  folders, upsertFolder, deleteFolder,
 }) {
   const [cmdr, setCmdr] = useState(settings.cmdr || '');
   const [ship, setShip] = useState(settings.ship || '');
@@ -261,6 +348,9 @@ export default function SettingsView({
           onChange={handleImport}
         />
       </Panel>
+
+      {/* ── Folder Management ─────────────────────────────────────────── */}
+      <FolderManager folders={folders || []} upsertFolder={upsertFolder} deleteFolder={deleteFolder} />
 
       {/* ── DB Info ───────────────────────────────────────────────────── */}
       <Panel title="Database Info">

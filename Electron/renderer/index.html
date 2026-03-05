@@ -217,16 +217,47 @@
         .tag { font-family:var(--font-mono); font-size:10px; padding:2px 6px; border:1px solid var(--border-c); color:var(--ed-cyan); letter-spacing:1px; }
         .tag-clickable { cursor:pointer; transition:background 0.12s, border-color 0.12s; }
         .tag-clickable:hover { background:rgba(0,212,255,0.18); border-color:var(--ed-cyan); }
-        .entry-acts { display:flex; gap:6px; margin-top:10px; }
+        .entry-acts { display:flex; gap:5px; margin-top:10px; flex-wrap:wrap; }
+        .btn-xs { font-size:9px; padding:4px 8px; letter-spacing:1px; }
+        .entry-acts .btn { font-size:9px; padding:5px 9px; letter-spacing:1px; white-space:nowrap; }
 
         /* ── BOOKMARKS ───────────────────────────── */
         .bm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
-        .bm-card { border:1px solid var(--border-c); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; }
+        .bm-card { border:1px solid var(--border-c); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; position:relative; cursor:default; }
         .bm-card:hover { border-color:var(--ed-cyan); box-shadow:0 0 16px rgba(0,212,255,0.12); }
-        .bm-sys { font-family:var(--font-hud); font-size:14px; color:var(--ed-cyan); margin-bottom:3px; text-shadow:0 0 8px rgba(0,212,255,0.35); }
-        .bm-type { font-family:var(--font-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+        .bm-card.pinned { border-color:var(--ed-orange); box-shadow:0 0 10px rgba(255,98,0,0.18); }
+        .bm-card.pinned::after { content:'◈ PINNED'; position:absolute; top:6px; right:12px; font-family:var(--font-mono); font-size:9px; color:var(--ed-orange); letter-spacing:2px; opacity:0.8; }
+        .bm-card.drag-over { border-color:#00FF88; box-shadow:0 0 16px rgba(0,255,136,0.25); opacity:0.85; }
+        .bm-card.dragging  { opacity:0.35; }
+        .bm-drag-handle { position:absolute; top:8px; left:8px; font-size:13px; color:var(--text-dim); cursor:grab; opacity:0; transition:opacity 0.15s; user-select:none; }
+        .bm-card:hover .bm-drag-handle { opacity:0.5; }
+        .bm-drag-handle:active { cursor:grabbing; }
+        .bm-sys { font-family:var(--font-hud); font-size:14px; color:var(--ed-cyan); margin-bottom:3px; text-shadow:0 0 8px rgba(0,212,255,0.35); padding-left:18px; }
+        .bm-type { font-family:var(--font-mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; padding-left:18px; }
         .bm-notes { font-size:14px; color:var(--text-dim); line-height:1.5; user-select:text; }
         .bm-coords { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:7px; }
+        /* folder section header */
+        .bm-folder-hdr { grid-column:1/-1; display:flex; align-items:center; gap:10px; margin-top:10px; margin-bottom:4px; cursor:pointer; user-select:none; }
+        .bm-folder-hdr:hover .bm-folder-hdr-lbl { border-color:var(--ed-cyan); color:var(--text-primary); }
+        .bm-folder-hdr-line { flex:1; height:1px; background:var(--border-c); }
+        .bm-folder-hdr-lbl { font-family:var(--font-mono); font-size:10px; color:var(--ed-cyan); letter-spacing:3px; text-transform:uppercase; white-space:nowrap; padding:2px 10px; border:1px solid var(--border-c); clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%); transition:color 0.15s,border-color 0.15s; display:flex; align-items:center; gap:6px; }
+        .bm-folder-chevron { font-size:8px; transition:transform 0.2s; display:inline-block; }
+        .bm-folder-hdr.collapsed .bm-folder-chevron { transform:rotate(-90deg); }
+        .bm-folder-body { grid-column:1/-1; display:contents; }
+        .bm-folder-body.collapsed { display:none; }
+        /* sort / filter toolbar */
+        .bm-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+        .bm-toolbar select { background:rgba(0,0,0,0.4); border:1px solid var(--border-c); color:var(--ed-cyan); font-family:var(--font-mono); font-size:11px; padding:6px 10px; outline:none; letter-spacing:1px; cursor:pointer; }
+        .bm-toolbar select:focus { border-color:var(--ed-cyan); }
+        .bm-toolbar label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; white-space:nowrap; }
+        /* log sort toolbar */
+        .log-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+        .log-toolbar select { background:rgba(0,0,0,0.4); border:1px solid var(--border-o); color:var(--ed-orange); font-family:var(--font-mono); font-size:11px; padding:6px 10px; outline:none; letter-spacing:1px; cursor:pointer; }
+        .log-toolbar label { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; white-space:nowrap; }
+        /* quick-add bar */
+        .quick-add-bar { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:10px 14px; background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.2); flex-wrap:wrap; }
+        .quick-add-sys { font-family:var(--font-mono); font-size:12px; color:var(--ed-cyan); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+        .quick-add-sys em { color:var(--text-dim); font-style:normal; margin-right:6px; }
 
         /* ── JOURNAL FEED ────────────────────────── */
         .j-event { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid rgba(0,212,255,0.07); align-items:flex-start; }
@@ -346,8 +377,11 @@
 
         /* ── BODY NOTES ──────────────────────────────── */
         .bn-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
-        .bn-card { border:1px solid rgba(0,212,255,0.25); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; }
+        .bn-card { border:1px solid rgba(0,212,255,0.25); padding:14px; background:rgba(5,14,24,0.8); clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.15s; position:relative; cursor:default; }
         .bn-card:hover { border-color:rgba(0,212,255,0.5); box-shadow:0 0 14px rgba(0,212,255,0.1); }
+        .bn-card.pinned { border-color:var(--ed-orange); box-shadow:0 0 10px rgba(255,98,0,0.18); }
+        .bn-card.drag-over { border-color:#00FF88; box-shadow:0 0 16px rgba(0,255,136,0.25); opacity:0.85; }
+        .bn-card.dragging  { opacity:0.35; }
         .bn-body { font-family:var(--font-hud); font-size:13px; color:var(--ed-cyan); margin-bottom:2px; }
         .bn-sys  { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:8px; }
         .bn-badges { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
@@ -551,6 +585,16 @@
             </div>
             <button class="btn" onclick="openLogModal()">+ New Entry</button>
         </div>
+        <div class="log-toolbar">
+            <label>SORT</label>
+            <select id="log-sort" onchange="debouncedRenderLogs()">
+                <option value="date-desc">Date ↓ (newest)</option>
+                <option value="date-asc">Date ↑ (oldest)</option>
+                <option value="system-asc">System A→Z</option>
+                <option value="system-desc">System Z→A</option>
+                <option value="title-asc">Title A→Z</option>
+            </select>
+        </div>
         <div class="search-row">
             <input type="text" class="search-in" id="log-search" placeholder="SEARCH LOG ENTRIES..." oninput="debouncedRenderLogs()">
             <input type="text" class="search-in" id="log-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderLogs()">
@@ -566,6 +610,40 @@
                 <div class="view-sub">Points of interest across the galaxy</div>
             </div>
             <button class="btn btn-c" onclick="openBmModal()">+ Bookmark System</button>
+        </div>
+        <!-- Quick-Add from current HUD system -->
+        <div class="quick-add-bar" id="quick-add-bar">
+            <span class="quick-add-sys"><em>CURRENT SYSTEM:</em><span id="qa-sys-name">—</span></span>
+            <button class="btn btn-c btn-sm" onclick="quickAddBookmark()">⊕ Quick Bookmark</button>
+            <button class="btn btn-sm" onclick="quickAddLog()">◉ Quick Log Entry</button>
+        </div>
+        <!-- Sort / Filter toolbar -->
+        <div class="bm-toolbar">
+            <label>SORT</label>
+            <select id="bm-sort" onchange="debouncedRenderBookmarks()">
+                <option value="custom">Custom Order</option>
+                <option value="date-desc">Date Added ↓</option>
+                <option value="date-asc">Date Added ↑</option>
+                <option value="system-asc">System A→Z</option>
+                <option value="system-desc">System Z→A</option>
+                <option value="type">Type</option>
+            </select>
+            <label style="margin-left:8px">TYPE</label>
+            <select id="bm-type-filter" onchange="debouncedRenderBookmarks()">
+                <option value="">All Types</option>
+                <option value="POI">POI</option>
+                <option value="EXPLORATION">Exploration</option>
+                <option value="TRADE">Trade</option>
+                <option value="COMBAT">Combat</option>
+                <option value="MINING">Mining</option>
+                <option value="HOME">Home</option>
+                <option value="CARRIER">Carrier</option>
+                <option value="OTHER">Other</option>
+            </select>
+            <label style="margin-left:8px">FOLDER</label>
+            <select id="bm-folder-filter" onchange="debouncedRenderBookmarks()">
+                <option value="">All Folders</option>
+            </select>
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
@@ -626,6 +704,21 @@
                 <div class="view-sub">Structured scan records — planets, moons, stars</div>
             </div>
             <button class="btn btn-c" onclick="openBnModal()">+ New Scan Note</button>
+        </div>
+        <!-- Sort / Filter toolbar -->
+        <div class="bm-toolbar">
+            <label>SORT</label>
+            <select id="bn-sort" onchange="debouncedRenderBn()">
+                <option value="custom">Custom Order</option>
+                <option value="date-desc">Date Added ↓</option>
+                <option value="date-asc">Date Added ↑</option>
+                <option value="system-asc">System A→Z</option>
+                <option value="body-asc">Body Name A→Z</option>
+            </select>
+            <label style="margin-left:8px">FOLDER</label>
+            <select id="bn-folder-filter" onchange="debouncedRenderBn()">
+                <option value="">All Folders</option>
+            </select>
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bn-search" placeholder="SEARCH BODIES..." oninput="debouncedRenderBn()">
@@ -859,6 +952,34 @@
             </div>
         </div>
 
+        <!-- FOLDER MANAGEMENT -->
+        <div class="panel">
+            <div class="panel-title">Folder Management</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:14px">
+                Folders group bookmarks and body notes in their respective views. Create folder names here — they'll appear as dropdown options when creating or editing entries. Folders with items cannot be deleted until all items are reassigned.
+            </div>
+            <div class="dash-two" style="gap:16px">
+                <!-- Bookmark folders -->
+                <div>
+                    <div style="font-family:var(--font-mono);font-size:10px;color:var(--ed-orange);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase">◎ Bookmark Folders</div>
+                    <div id="folder-bm-list" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" class="form-input" id="folder-bm-new" placeholder="New folder name..." style="flex:1;font-size:13px;padding:7px 10px" onkeydown="if(event.key==='Enter')addBmFolder()">
+                        <button class="btn btn-sm" onclick="addBmFolder()">+ Add</button>
+                    </div>
+                </div>
+                <!-- Body note folders -->
+                <div>
+                    <div style="font-family:var(--font-mono);font-size:10px;color:var(--ed-cyan);letter-spacing:3px;margin-bottom:10px;text-transform:uppercase">⬡ Body Note Folders</div>
+                    <div id="folder-bn-list" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" class="form-input" id="folder-bn-new" placeholder="New folder name..." style="flex:1;font-size:13px;padding:7px 10px" onkeydown="if(event.key==='Enter')addBnFolder()">
+                        <button class="btn btn-c btn-sm" onclick="addBnFolder()">+ Add</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- SYNC SERVER PANEL -->
         <div class="panel">
             <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
@@ -942,6 +1063,22 @@
     <div class="form-row">
         <div class="form-group"><label class="form-lbl">System</label><input type="text" class="form-input" id="bn-sys" placeholder="Star system..."></div>
         <div class="form-group"><label class="form-lbl">Body Name</label><input type="text" class="form-input" id="bn-bname" placeholder="e.g. Sol 3 / Earth"></div>
+    </div>
+
+    <!-- Row 1b: Folder + Pin -->
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-lbl">Folder / Category</label>
+            <select class="form-input form-sel" id="bn-folder">
+                <option value="">— No Folder —</option>
+            </select>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;gap:10px;padding-bottom:2px">
+            <label class="form-lbl" style="margin-bottom:0;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none">
+                <input type="checkbox" id="bn-pinned" style="width:15px;height:15px;accent-color:var(--ed-orange);cursor:pointer">
+                <span>Pin to top</span>
+            </label>
+        </div>
     </div>
 
     <!-- Row 2: Body type / star class / terraform -->
@@ -1124,6 +1261,20 @@
                 <option value="CARRIER">Carrier Port</option>
                 <option value="OTHER">Other</option>
             </select>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-lbl">Folder / Category</label>
+            <select class="form-input form-sel" id="bm-folder">
+                <option value="">— No Folder —</option>
+            </select>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;gap:10px;padding-bottom:2px">
+            <label class="form-lbl" style="margin-bottom:0;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none">
+                <input type="checkbox" id="bm-pinned" style="width:15px;height:15px;accent-color:var(--ed-orange);cursor:pointer">
+                <span>Pin to top</span>
+            </label>
         </div>
     </div>
     <div class="form-row3">
@@ -1354,6 +1505,19 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // INIT — load from SQLite via IPC
 // ══════════════════════════════════════════════════════════════════
 let gLogs=[], gBm=[], gVisited=[], gJEvents=[];
+let gBmFolders = [];   // persisted bookmark folder names
+let gBnFolders = [];   // persisted body-note folder names
+const collapsedBmFolders = new Set();  // folder names currently collapsed in bookmarks view
+const collapsedBnFolders = new Set();  // folder names currently collapsed in body notes view
+
+// ── Populate a folder <select> with all known folder names ────────────────────
+function populateFolderSelect(selId, folders, currentValue) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— No Folder —</option>' +
+        folders.map(f => `<option value="${f}"${f === currentValue ? ' selected' : ''}>${f}</option>`).join('');
+    if (currentValue) sel.value = currentValue;
+}
 
 // ══════════════════════════════════════════════════════════════════
 // LOADING OVERLAY
@@ -1390,6 +1554,10 @@ async function initApp() {
     gVisited = await window.api.getVisited();
     gJEvents = await window.api.getJournalEvents();
 
+    // Load persisted folder lists
+    try { gBmFolders = JSON.parse(await window.api.getSetting('bmFolders', '[]') || '[]'); } catch { gBmFolders = []; }
+    try { gBnFolders = JSON.parse(await window.api.getSetting('bnFolders', '[]') || '[]'); } catch { gBnFolders = []; }
+
     if (autoLoad && autoLoad.autoLoaded && autoLoad.ok) {
         const fname = autoLoad.latestFile || '';
         document.getElementById('tb-journal-name').textContent = `${autoLoad.fileCount} journal files`;
@@ -1409,6 +1577,8 @@ async function initApp() {
     hideLoadingOverlay();
     updateDash();
     updateBadges();
+    refreshFolderFilter();
+    refreshBnFolderFilter();
 }
 
 initApp();
@@ -1515,9 +1685,10 @@ async function deleteLog(id) {
 }
 
 function renderLogs() {
-    const q   = (document.getElementById('log-search')?.value||'').toLowerCase();
-    const tag = (document.getElementById('log-tag-filter')?.value||'').toLowerCase().trim();
-    const fl  = gLogs.filter(l => {
+    const q       = (document.getElementById('log-search')?.value||'').toLowerCase();
+    const tag     = (document.getElementById('log-tag-filter')?.value||'').toLowerCase().trim();
+    const sortMode = document.getElementById('log-sort')?.value || 'date-desc';
+    let fl = gLogs.filter(l => {
         const textMatch = !q || (
             l.title.toLowerCase().includes(q) ||
             (l.system||'').toLowerCase().includes(q) ||
@@ -1526,6 +1697,11 @@ function renderLogs() {
         const tagMatch  = !tag || (l.tags||[]).some(t=>t.toLowerCase().includes(tag));
         return textMatch && tagMatch;
     });
+    if (sortMode === 'date-desc')     fl.sort((a,b)=>b.ts-a.ts);
+    else if (sortMode === 'date-asc') fl.sort((a,b)=>a.ts-b.ts);
+    else if (sortMode === 'system-asc')  fl.sort((a,b)=>(a.system||'').localeCompare(b.system||''));
+    else if (sortMode === 'system-desc') fl.sort((a,b)=>(b.system||'').localeCompare(a.system||''));
+    else if (sortMode === 'title-asc')   fl.sort((a,b)=>a.title.localeCompare(b.title));
     const c = document.getElementById('log-list');
     if (fl.length===0) {
         c.innerHTML = `<div class="empty"><div class="empty-icon">◉</div><div class="empty-txt">${gLogs.length===0?'No log entries yet.':'No entries match your search.'}</div></div>`;
@@ -1563,16 +1739,20 @@ function openBmModal(id, prefillSys) {
     document.getElementById('bm-eid').value = id||'';
     if (id) {
         const b = gBm.find(x=>x.id===id);
-        document.getElementById('bm-sys').value   = b.system;
-        document.getElementById('bm-type').value  = b.type;
-        document.getElementById('bm-x').value     = b.lat ?? b.x ?? '';
-        document.getElementById('bm-y').value     = b.lon ?? b.y ?? '';
-        document.getElementById('bm-z').value     = b.z ?? '';
-        document.getElementById('bm-notes').value = b.notes||'';
-        document.getElementById('bm-tags').value  = (b.tags||[]).join(', ');
+        document.getElementById('bm-sys').value    = b.system;
+        document.getElementById('bm-type').value   = b.type;
+        document.getElementById('bm-x').value      = b.lat ?? b.x ?? '';
+        document.getElementById('bm-y').value      = b.lon ?? b.y ?? '';
+        document.getElementById('bm-z').value      = b.z ?? '';
+        document.getElementById('bm-notes').value  = b.notes||'';
+        document.getElementById('bm-tags').value   = (b.tags||[]).join(', ');
+        populateFolderSelect('bm-folder', getAllBmFolders(), b.folder||'');
+        document.getElementById('bm-pinned').checked = !!b.pinned;
     } else {
         document.getElementById('bm-sys').value   = prefillSys || document.getElementById('top-sys').textContent;
         document.getElementById('bm-type').value  = 'POI';
+        populateFolderSelect('bm-folder', getAllBmFolders(), '');
+        document.getElementById('bm-pinned').checked = false;
         ['bm-x','bm-y','bm-z','bm-notes','bm-tags'].forEach(id=>document.getElementById(id).value='');
     }
     document.getElementById('bm-modal').classList.add('open');
@@ -1584,18 +1764,25 @@ async function saveBm() {
     const id     = document.getElementById('bm-eid').value;
     const system = document.getElementById('bm-sys').value.trim();
     if (!system) { toast('⚠ System name required'); return; }
+    const existing = id ? gBm.find(b=>b.id===id) : null;
     const bm = {
-        id:    id||Date.now().toString(), ts:Date.now(), system,
-        type:  document.getElementById('bm-type').value,
-        lat:   document.getElementById('bm-x').value !== '' ? parseFloat(document.getElementById('bm-x').value) : null,
-        lon:   document.getElementById('bm-y').value !== '' ? parseFloat(document.getElementById('bm-y').value) : null,
-        z:     document.getElementById('bm-z').value  !== '' ? parseFloat(document.getElementById('bm-z').value)  : null,
-        notes: document.getElementById('bm-notes').value.trim(),
-        tags:  document.getElementById('bm-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+        id:         id||Date.now().toString(),
+        ts:         id ? (existing?.ts || Date.now()) : Date.now(),
+        system,
+        type:       document.getElementById('bm-type').value,
+        lat:        document.getElementById('bm-x').value !== '' ? parseFloat(document.getElementById('bm-x').value) : null,
+        lon:        document.getElementById('bm-y').value !== '' ? parseFloat(document.getElementById('bm-y').value) : null,
+        z:          document.getElementById('bm-z').value  !== '' ? parseFloat(document.getElementById('bm-z').value)  : null,
+        notes:      document.getElementById('bm-notes').value.trim(),
+        tags:       document.getElementById('bm-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+        folder:     document.getElementById('bm-folder').value.trim(),
+        pinned:     document.getElementById('bm-pinned').checked,
+        sort_order: existing?.sort_order ?? gBm.length,
     };
     await window.api.saveBookmark(bm);
     gBm = await window.api.getBookmarks();
     closeBmModal(); renderBookmarks(); updateDash(); updateBadges();
+    refreshFolderFilter();
     toast('◎ Bookmark saved');
 }
 
@@ -1607,42 +1794,216 @@ async function deleteBm(id) {
     toast('Bookmark deleted');
 }
 
+// ── Folder filter dropdown population ────────────────────────────────────────
+function refreshFolderFilter() {
+    const sel = document.getElementById('bm-folder-filter');
+    if (!sel) return;
+    const cur = sel.value;
+    const folders = getAllBmFolders();
+    sel.innerHTML = '<option value="">All Folders</option>' +
+        folders.map(f=>`<option value="${f}"${f===cur?' selected':''}>${f}</option>`).join('');
+}
+
+// ── Quick-add current system as bookmark (no modal) ───────────────────────────
+async function quickAddBookmark() {
+    const sys = document.getElementById('top-sys').textContent.trim();
+    if (!sys || sys === 'SOL' && !document.getElementById('inp-cmdr').value) {
+        openBmModal(null, sys); return;
+    }
+    if (gBm.some(b=>b.system.toLowerCase()===sys.toLowerCase())) {
+        toast('◎ Already bookmarked: ' + sys); return;
+    }
+    const bm = { id: Date.now().toString(), ts: Date.now(), system: sys, type: 'POI',
+        lat: null, lon: null, z: null, notes: '', tags: [], folder: '', pinned: false, sort_order: gBm.length };
+    await window.api.saveBookmark(bm);
+    gBm = await window.api.getBookmarks();
+    renderBookmarks(); updateDash(); updateBadges(); refreshFolderFilter();
+    toast('◎ Bookmarked: ' + sys);
+}
+
+// ── Quick-add current system as log entry (opens modal pre-filled) ────────────
+function quickAddLog() {
+    openLogModal();
+}
+
+// ── Drag-and-drop state ───────────────────────────────────────────────────────
+let dragSrcId = null;
+
 function renderBookmarks() {
-    const q   = (document.getElementById('bm-search')?.value||'').toLowerCase();
-    const tag = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
-    const fl  = gBm.filter(b => {
+    const q          = (document.getElementById('bm-search')?.value||'').toLowerCase();
+    const tag        = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
+    const typeFilter = (document.getElementById('bm-type-filter')?.value||'');
+    const folderFilter = (document.getElementById('bm-folder-filter')?.value||'');
+    const sortMode   = document.getElementById('bm-sort')?.value || 'custom';
+
+    // Update quick-add bar
+    const sysNow = document.getElementById('top-sys').textContent.trim();
+    const qaEl = document.getElementById('qa-sys-name');
+    if (qaEl) qaEl.textContent = sysNow || '—';
+
+    let fl = gBm.filter(b => {
         const textMatch = !q || (
             b.system.toLowerCase().includes(q) ||
             (b.notes||'').toLowerCase().includes(q) ||
             (b.tags||[]).some(t=>t.toLowerCase().includes(q))
         );
-        const tagMatch  = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
-        return textMatch && tagMatch;
+        const tagMatch    = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        const typeMatch   = !typeFilter || b.type === typeFilter;
+        const folderMatch = !folderFilter || (b.folder||'') === folderFilter;
+        return textMatch && tagMatch && typeMatch && folderMatch;
     });
-    const c  = document.getElementById('bm-grid');
-    if (fl.length===0) {
+
+    // Sort
+    const isCustom = sortMode === 'custom';
+    if (sortMode === 'date-desc')    fl.sort((a,b)=>b.ts-a.ts);
+    else if (sortMode === 'date-asc') fl.sort((a,b)=>a.ts-b.ts);
+    else if (sortMode === 'system-asc') fl.sort((a,b)=>a.system.localeCompare(b.system));
+    else if (sortMode === 'system-desc') fl.sort((a,b)=>b.system.localeCompare(a.system));
+    else if (sortMode === 'type') fl.sort((a,b)=>a.type.localeCompare(b.type));
+    // custom: keep DB order (pinned first, then sort_order)
+
+    const c = document.getElementById('bm-grid');
+    if (fl.length === 0) {
         c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">◎</div><div class="empty-txt">${gBm.length===0?'No bookmarks yet.':'No bookmarks match.'}</div></div>`;
         return;
     }
-    c.innerHTML = fl.map(b=>{
+
+    const frag = document.createDocumentFragment();
+
+    // Separate pinned vs unpinned for rendering
+    const pinned   = fl.filter(b=>b.pinned);
+    const unpinned = fl.filter(b=>!b.pinned);
+
+    function makeCard(b) {
         const hasCoords = b.lat !== null && b.lat !== undefined && b.lon !== null && b.lon !== undefined;
         const coordStr  = hasCoords
             ? `Lat: ${b.lat}  Lon: ${b.lon}${(b.z !== null && b.z !== undefined) ? '  Alt: '+b.z : ''}`
             : '';
-        return `
-        <div class="bm-card">
-            <div class="bm-sys">${b.system}</div>
-            <div class="bm-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type}</div>
+
+        const card = document.createElement('div');
+        card.className = 'bm-card' + (b.pinned ? ' pinned' : '');
+        card.dataset.id = b.id;
+
+        if (isCustom) {
+            card.draggable = true;
+            card.addEventListener('dragstart', e => {
+                dragSrcId = b.id;
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            card.addEventListener('dragend', () => card.classList.remove('dragging'));
+            card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+            card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+            card.addEventListener('drop', async e => {
+                e.preventDefault();
+                card.classList.remove('drag-over');
+                if (!dragSrcId || dragSrcId === b.id) return;
+                // Reorder gBm
+                const visibleIds = [...document.querySelectorAll('#bm-grid .bm-card')].map(c=>c.dataset.id);
+                const fromIdx = visibleIds.indexOf(dragSrcId);
+                const toIdx   = visibleIds.indexOf(b.id);
+                if (fromIdx < 0 || toIdx < 0) return;
+                visibleIds.splice(fromIdx, 1);
+                visibleIds.splice(toIdx, 0, dragSrcId);
+                // Build full order: visible IDs in new order, then any not visible
+                const allIds = gBm.map(bm=>bm.id);
+                const notVisible = allIds.filter(id=>!visibleIds.includes(id));
+                const newOrder = [...visibleIds, ...notVisible];
+                await window.api.reorderBookmarks(newOrder);
+                gBm = await window.api.getBookmarks();
+                renderBookmarks();
+            });
+        }
+
+        card.innerHTML =
+            (isCustom ? `<div class="bm-drag-handle" title="Drag to reorder">⠿</div>` : '') +
+            `<div class="bm-sys">${b.system}</div>
+            <div class="bm-type" style="color:${typeCol[b.type]||'#4A6A8A'}">${b.type}${b.folder ? `<span style="color:var(--text-dim);margin-left:8px;font-size:10px">◫ ${b.folder}</span>` : ''}</div>
             ${b.notes?`<div class="bm-notes">${b.notes}</div>`:''}
             ${hasCoords?`<div class="bm-coords">${coordStr}</div>`:''}
             ${b.tags?.length?`<div class="tag-row">${b.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBmsByTag('${t.replace(/'/g,"\\'")}') " title="Filter by tag">${t}</span>`).join('')}</div>`:''}
             <div class="entry-acts" style="margin-top:10px">
                 <button class="btn btn-sm" onclick="openBmViewModal('${b.id}')">View</button>
                 <button class="btn btn-c btn-sm" onclick="openBmModal('${b.id}')">Edit</button>
+                <button class="btn ${b.pinned?'btn-g':'btn-sm'} btn-sm" onclick="togglePin('${b.id}')" title="${b.pinned?'Unpin':'Pin to top'}">${b.pinned?'◈ Unpin':'◈ Pin'}</button>
                 <button class="btn btn-d btn-sm" onclick="deleteBm('${b.id}')">Delete</button>
-            </div>
-        </div>`;
-    }).join('');
+            </div>`;
+        return card;
+    }
+
+    // Render pinned section first (if any)
+    if (pinned.length > 0) {
+        const hdr = document.createElement('div');
+        hdr.className = 'bm-folder-hdr';
+        hdr.innerHTML = `<div class="bm-folder-hdr-line"></div><div class="bm-folder-hdr-lbl" style="color:var(--ed-orange);border-color:rgba(255,98,0,0.4)">◈ Pinned</div><div class="bm-folder-hdr-line"></div>`;
+        frag.appendChild(hdr);
+        pinned.forEach(b => frag.appendChild(makeCard(b)));
+    }
+
+    function makeFolderSection(fname, items, hdrStyle, labelStyle) {
+        const isCollapsed = fname !== '__pinned__' && fname !== '__none__' && collapsedBmFolders.has(fname);
+        const hdr = document.createElement('div');
+        hdr.className = 'bm-folder-hdr' + (isCollapsed ? ' collapsed' : '');
+        const lbl = fname === '__pinned__' ? '◈ Pinned' : fname === '__none__' ? 'Uncategorised' : `◫ ${fname}`;
+        const chevron = (fname === '__pinned__' || fname === '__none__') ? '' : `<span class="bm-folder-chevron">▾</span>`;
+        hdr.innerHTML = `<div class="bm-folder-hdr-line"></div><div class="bm-folder-hdr-lbl" ${labelStyle}>${chevron}${lbl}</div><div class="bm-folder-hdr-line"></div>`;
+        if (hdrStyle) hdr.querySelector('.bm-folder-hdr-lbl').setAttribute('style', labelStyle);
+
+        const body = document.createElement('div');
+        body.className = 'bm-folder-body' + (isCollapsed ? ' collapsed' : '');
+
+        if (fname !== '__pinned__' && fname !== '__none__') {
+            hdr.addEventListener('click', () => {
+                const nowCollapsed = collapsedBmFolders.has(fname);
+                if (nowCollapsed) { collapsedBmFolders.delete(fname); hdr.classList.remove('collapsed'); body.classList.remove('collapsed'); }
+                else              { collapsedBmFolders.add(fname);    hdr.classList.add('collapsed');    body.classList.add('collapsed'); }
+            });
+        }
+
+        items.forEach(b => body.appendChild(makeCard(b)));
+        frag.appendChild(hdr);
+        frag.appendChild(body);
+    }
+
+    // Render unpinned — group by folder if no active folder filter
+    if (!folderFilter) {
+        // Group by folder
+        const byFolder = {};
+        const noFolder = [];
+        unpinned.forEach(b => {
+            const f = b.folder || '';
+            if (f) { (byFolder[f] = byFolder[f]||[]).push(b); }
+            else   { noFolder.push(b); }
+        });
+        const folderNames = Object.keys(byFolder).sort();
+
+        folderNames.forEach(fname => {
+            makeFolderSection(fname, byFolder[fname], '', '');
+        });
+
+        if (noFolder.length > 0) {
+            if (folderNames.length > 0) {
+                makeFolderSection('__none__', noFolder, '', 'style="color:var(--text-dim)"');
+            } else {
+                noFolder.forEach(b => frag.appendChild(makeCard(b)));
+            }
+        }
+    } else {
+        unpinned.forEach(b => frag.appendChild(makeCard(b)));
+    }
+
+    c.replaceChildren(frag);
+}
+
+// ── Toggle pin without opening modal ─────────────────────────────────────────
+async function togglePin(id) {
+    const b = gBm.find(x=>x.id===id);
+    if (!b) return;
+    b.pinned = !b.pinned;
+    await window.api.saveBookmark(b);
+    gBm = await window.api.getBookmarks();
+    renderBookmarks();
+    toast(b.pinned ? '◈ Pinned' : '◈ Unpinned');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1735,7 +2096,12 @@ window.api.onJournalEvents(async (newEvs) => {
 window.api.onMetaUpdate(meta => {
     if (meta.cmdr && document.getElementById('inp-cmdr').value === 'UNKNOWN') document.getElementById('inp-cmdr').value = meta.cmdr;
     if (meta.ship && document.getElementById('inp-ship').value === 'UNKNOWN VESSEL') document.getElementById('inp-ship').value = meta.ship;
-    if (meta.system) { document.getElementById('top-sys').textContent = meta.system; document.getElementById('sb-sys').textContent = meta.system; }
+    if (meta.system) {
+        document.getElementById('top-sys').textContent = meta.system;
+        document.getElementById('sb-sys').textContent  = meta.system;
+        const qaEl = document.getElementById('qa-sys-name');
+        if (qaEl) qaEl.textContent = meta.system;
+    }
 });
 
 const evCls  = e => ['FSDJump','CarrierJump'].includes(e.event)?'ev-jump':e.event==='Scan'?'ev-scan':['Docked','Undocked'].includes(e.event)?'ev-dock':'ev-other';
@@ -1846,6 +2212,145 @@ async function loadSettings() {
     document.getElementById('db-jev').textContent  = gJEvents.length;
     // Populate sync info
     loadSyncInfo();
+    // Folder management panels
+    renderFolderPanel();
+}
+
+// ── Folder helpers ────────────────────────────────────────────────────────────
+function getAllBmFolders() {
+    return [...new Set([...gBmFolders, ...gBm.map(b=>b.folder||'').filter(Boolean)])].sort();
+}
+function getAllBnFolders() {
+    return [...new Set([...gBnFolders, ...gBn.map(n=>n.folder||'').filter(Boolean)])].sort();
+}
+
+// ── Folder management panel ───────────────────────────────────────────────────
+function renderFolderPanel() {
+    // Bookmark folders — union of persisted + live
+    const bmFolders = getAllBmFolders();
+    const bmList = document.getElementById('folder-bm-list');
+    if (bmList) {
+        bmList.innerHTML = bmFolders.length
+            ? bmFolders.map(f => {
+                const count = gBm.filter(b=>b.folder===f).length;
+                const canDelete = count === 0 && gBmFolders.includes(f);
+                return `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,98,0,0.07);border:1px solid rgba(255,98,0,0.3);padding:4px 10px;clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,0 100%)">
+                    <span style="font-family:var(--font-mono);font-size:11px;color:var(--ed-orange)">◫ ${f}</span>
+                    <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">(${count})</span>
+                    <button onclick="renameBmFolder('${f.replace(/'/g,"\\'")}','${f.replace(/'/g,"\\'")}\')" title="Rename folder" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0 2px">✎</button>
+                    ${canDelete ? `<button onclick="deleteBmFolder('${f.replace(/'/g,"\\'")}\')" title="Delete empty folder" style="background:none;border:none;color:rgba(255,64,64,0.6);cursor:pointer;font-size:11px;padding:0 2px">✕</button>` : ''}
+                </div>`;
+            }).join('')
+            : `<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);padding:4px 0">No bookmark folders yet.</div>`;
+    }
+    // Body note folders
+    const bnFolders = getAllBnFolders();
+    const bnList = document.getElementById('folder-bn-list');
+    if (bnList) {
+        bnList.innerHTML = bnFolders.length
+            ? bnFolders.map(f => {
+                const count = gBn.filter(n=>n.folder===f).length;
+                const canDelete = count === 0 && gBnFolders.includes(f);
+                return `<div style="display:flex;align-items:center;gap:6px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.3);padding:4px 10px;clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,0 100%)">
+                    <span style="font-family:var(--font-mono);font-size:11px;color:var(--ed-cyan)">◫ ${f}</span>
+                    <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">(${count})</span>
+                    <button onclick="renameBnFolder('${f.replace(/'/g,"\\'")}','${f.replace(/'/g,"\\'")}\')" title="Rename folder" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0 2px">✎</button>
+                    ${canDelete ? `<button onclick="deleteBnFolder('${f.replace(/'/g,"\\'")}\')" title="Delete empty folder" style="background:none;border:none;color:rgba(255,64,64,0.6);cursor:pointer;font-size:11px;padding:0 2px">✕</button>` : ''}
+                </div>`;
+            }).join('')
+            : `<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);padding:4px 0">No body note folders yet.</div>`;
+    }
+}
+
+async function addBmFolder() {
+    const inp = document.getElementById('folder-bm-new');
+    const name = inp.value.trim();
+    if (!name) return;
+    if (gBmFolders.includes(name)) { toast(`◫ Folder "${name}" already exists`); inp.value = ''; return; }
+    gBmFolders.push(name);
+    gBmFolders.sort();
+    await window.api.setSetting('bmFolders', JSON.stringify(gBmFolders));
+    inp.value = '';
+    renderFolderPanel();
+    refreshFolderFilter();
+    const bmModal = document.getElementById('bm-modal');
+    if (bmModal && bmModal.classList.contains('open')) {
+        const cur = document.getElementById('bm-folder').value;
+        populateFolderSelect('bm-folder', getAllBmFolders(), cur);
+    }
+    toast(`◫ Folder "${name}" created`);
+}
+
+async function addBnFolder() {
+    const inp = document.getElementById('folder-bn-new');
+    const name = inp.value.trim();
+    if (!name) return;
+    if (gBnFolders.includes(name)) { toast(`◫ Folder "${name}" already exists`); inp.value = ''; return; }
+    gBnFolders.push(name);
+    gBnFolders.sort();
+    await window.api.setSetting('bnFolders', JSON.stringify(gBnFolders));
+    inp.value = '';
+    renderFolderPanel();
+    refreshBnFolderFilter();
+    const bnModal = document.getElementById('bn-modal');
+    if (bnModal && bnModal.classList.contains('open')) {
+        const cur = document.getElementById('bn-folder').value;
+        populateFolderSelect('bn-folder', getAllBnFolders(), cur);
+    }
+    toast(`◫ Folder "${name}" created`);
+}
+
+async function renameBmFolder(oldName, displayName) {
+    const newName = prompt(`Rename bookmark folder "${displayName}" to:`, displayName);
+    if (!newName || newName === oldName) return;
+    // Update all bookmarks in this folder
+    const toUpdate = gBm.filter(b=>b.folder===oldName);
+    for (const b of toUpdate) {
+        await window.api.saveBookmark({...b, folder: newName});
+    }
+    // Update persisted list
+    const idx = gBmFolders.indexOf(oldName);
+    if (idx !== -1) { gBmFolders[idx] = newName; gBmFolders.sort(); await window.api.setSetting('bmFolders', JSON.stringify(gBmFolders)); }
+    gBm = await window.api.getBookmarks();
+    refreshFolderFilter();
+    renderBookmarks();
+    renderFolderPanel();
+    toast(`◫ Renamed "${oldName}" → "${newName}" (${toUpdate.length} items)`);
+}
+
+async function renameBnFolder(oldName, displayName) {
+    const newName = prompt(`Rename body note folder "${displayName}" to:`, displayName);
+    if (!newName || newName === oldName) return;
+    const toUpdate = gBn.filter(n=>n.folder===oldName);
+    for (const n of toUpdate) {
+        await window.api.saveBodyNote({...n, folder: newName});
+    }
+    // Update persisted list
+    const idx = gBnFolders.indexOf(oldName);
+    if (idx !== -1) { gBnFolders[idx] = newName; gBnFolders.sort(); await window.api.setSetting('bnFolders', JSON.stringify(gBnFolders)); }
+    gBn = await window.api.getBodyNotes();
+    refreshBnFolderFilter();
+    renderBn();
+    renderFolderPanel();
+    toast(`◫ Renamed "${oldName}" → "${newName}" (${toUpdate.length} items)`);
+}
+
+async function deleteBmFolder(name) {
+    if (!confirm(`Delete empty folder "${name}"?`)) return;
+    gBmFolders = gBmFolders.filter(f => f !== name);
+    await window.api.setSetting('bmFolders', JSON.stringify(gBmFolders));
+    renderFolderPanel();
+    refreshFolderFilter();
+    toast(`◫ Folder "${name}" deleted`);
+}
+
+async function deleteBnFolder(name) {
+    if (!confirm(`Delete empty folder "${name}"?`)) return;
+    gBnFolders = gBnFolders.filter(f => f !== name);
+    await window.api.setSetting('bnFolders', JSON.stringify(gBnFolders));
+    renderFolderPanel();
+    refreshBnFolderFilter();
+    toast(`◫ Folder "${name}" deleted`);
 }
 
 // ── Sync server UI ────────────────────────────────────────────────────────────
@@ -2338,6 +2843,8 @@ function openBnModal(id) {
         document.getElementById('bn-val').value       = n.value || 0;
         document.getElementById('bn-tags').value      = (n.tags || []).join(', ');
         document.getElementById('bn-notes').value     = n.notes || '';
+        populateFolderSelect('bn-folder', getAllBnFolders(), n.folder || '');
+        document.getElementById('bn-pinned').checked  = !!n.pinned;
         setLandable(!!n.landable);
         _bnCoords = JSON.parse(JSON.stringify(n.coords || [])); // deep copy
     } else {
@@ -2350,6 +2857,8 @@ function openBnModal(id) {
         document.getElementById('bn-bio').value       = 0;
         document.getElementById('bn-geo').value       = 0;
         document.getElementById('bn-val').value       = 0;
+        populateFolderSelect('bn-folder', getAllBnFolders(), '');
+        document.getElementById('bn-pinned').checked  = false;
         setLandable(false);
         _bnCoords = [];
     }
@@ -2364,11 +2873,11 @@ async function saveBn() {
     const bname   = document.getElementById('bn-bname').value.trim();
     const system  = document.getElementById('bn-sys').value.trim();
     if (!bname || !system) { toast('⚠ System and body name required'); return; }
-    // Filter out coords with no lat/lon
     const validCoords = _bnCoords.filter(c => c.lat !== null && c.lon !== null && c.lat !== undefined && c.lon !== undefined);
+    const existing = id ? gBn.find(x=>x.id===id) : null;
     const note = {
         id:          id || Date.now().toString(),
-        ts:          id ? (gBn.find(x=>x.id===id)?.ts || Date.now()) : Date.now(),
+        ts:          id ? (existing?.ts || Date.now()) : Date.now(),
         system,
         body_name:   bname,
         body_type:   document.getElementById('bn-btype').value,
@@ -2384,10 +2893,14 @@ async function saveBn() {
         notes:       document.getElementById('bn-notes').value.trim(),
         tags:        document.getElementById('bn-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
         coords:      validCoords,
+        folder:      document.getElementById('bn-folder').value.trim(),
+        pinned:      document.getElementById('bn-pinned').checked,
+        sort_order:  existing?.sort_order ?? gBn.length,
     };
     await window.api.saveBodyNote(note);
     gBn = await window.api.getBodyNotes();
     closeBnModal(); renderBn(); updateBnBadge();
+    refreshBnFolderFilter();
     toast('⬡ Body note saved');
 }
 
@@ -2411,25 +2924,90 @@ const BN_TYPE_ICONS = {
     'Metal Rich':'⚙','High Metal Content':'⚙','Star':'⭐','Neutron':'💫','BlackHole':'⚫','Other':'◈'
 };
 
+// ── Body notes folder filter refresh ─────────────────────────────────────────
+function refreshBnFolderFilter() {
+    const sel = document.getElementById('bn-folder-filter');
+    if (!sel) return;
+    const cur = sel.value;
+    const folders = getAllBnFolders();
+    sel.innerHTML = '<option value="">All Folders</option>' +
+        folders.map(f=>`<option value="${f}"${f===cur?' selected':''}>${f}</option>`).join('');
+}
+
+// ── Toggle pin on body note ────────────────────────────────────────────────────
+async function toggleBnPin(id) {
+    const n = gBn.find(x=>x.id===id);
+    if (!n) return;
+    n.pinned = !n.pinned;
+    await window.api.saveBodyNote(n);
+    gBn = await window.api.getBodyNotes();
+    renderBn();
+    toast(n.pinned ? '◈ Pinned' : '◈ Unpinned');
+}
+
+// ── Drag state for body notes ─────────────────────────────────────────────────
+let bnDragSrcId = null;
+
 function renderBn() {
-    const q    = (document.getElementById('bn-search')?.value||'').toLowerCase();
-    const btyp = document.getElementById('bn-filter-type')?.value||'';
-    const land = document.getElementById('bn-filter-land')?.value;
-    const fl   = gBn.filter(n => {
-        const tm = !q || (n.body_name.toLowerCase().includes(q) || (n.system||'').toLowerCase().includes(q) || (n.notes||'').toLowerCase().includes(q));
-        const bm = !btyp || (n.body_type||'').includes(btyp);
-        const lm = land === '' || land === undefined ? true : (land==='1' ? !!n.landable : !n.landable);
-        return tm && bm && lm;
+    const q          = (document.getElementById('bn-search')?.value||'').toLowerCase();
+    const btyp       = document.getElementById('bn-filter-type')?.value||'';
+    const land       = document.getElementById('bn-filter-land')?.value;
+    const folderF    = (document.getElementById('bn-folder-filter')?.value||'');
+    const sortMode   = document.getElementById('bn-sort')?.value || 'custom';
+    const isCustom   = sortMode === 'custom';
+
+    let fl = gBn.filter(n => {
+        const tm  = !q || (n.body_name.toLowerCase().includes(q) || (n.system||'').toLowerCase().includes(q) || (n.notes||'').toLowerCase().includes(q));
+        const bm  = !btyp || (n.body_type||'').includes(btyp);
+        const lm  = land === '' || land === undefined ? true : (land==='1' ? !!n.landable : !n.landable);
+        const fm  = !folderF || (n.folder||'') === folderF;
+        return tm && bm && lm && fm;
     });
+
+    if (sortMode === 'date-desc')   fl.sort((a,b)=>b.ts-a.ts);
+    else if (sortMode === 'date-asc') fl.sort((a,b)=>a.ts-b.ts);
+    else if (sortMode === 'system-asc') fl.sort((a,b)=>(a.system||'').localeCompare(b.system||''));
+    else if (sortMode === 'body-asc')   fl.sort((a,b)=>(a.body_name||'').localeCompare(b.body_name||''));
+
     const c = document.getElementById('bn-grid');
     if (fl.length === 0) {
         c.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⬡</div><div class="empty-txt">${gBn.length===0?'No scan notes yet. Hit + New Scan Note to start.':'No bodies match your filter.'}</div></div>`;
         return;
     }
-    const frag = document.createDocumentFragment();
-    fl.forEach(n => {
+
+    function makeCard(n) {
         const card = document.createElement('div');
-        card.className = 'bn-card';
+        card.className = 'bn-card' + (n.pinned ? ' pinned' : '');
+        card.dataset.id = n.id;
+
+        if (isCustom) {
+            card.draggable = true;
+            card.addEventListener('dragstart', e => {
+                bnDragSrcId = n.id;
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            card.addEventListener('dragend', () => card.classList.remove('dragging'));
+            card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+            card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+            card.addEventListener('drop', async e => {
+                e.preventDefault();
+                card.classList.remove('drag-over');
+                if (!bnDragSrcId || bnDragSrcId === n.id) return;
+                const visibleIds = [...document.querySelectorAll('#bn-grid .bn-card')].map(c=>c.dataset.id);
+                const fromIdx = visibleIds.indexOf(bnDragSrcId);
+                const toIdx   = visibleIds.indexOf(n.id);
+                if (fromIdx < 0 || toIdx < 0) return;
+                visibleIds.splice(fromIdx, 1);
+                visibleIds.splice(toIdx, 0, bnDragSrcId);
+                const allIds = gBn.map(bn=>bn.id);
+                const notVisible = allIds.filter(id=>!visibleIds.includes(id));
+                await window.api.reorderBodyNotes([...visibleIds, ...notVisible]);
+                gBn = await window.api.getBodyNotes();
+                renderBn();
+            });
+        }
+
         const icon = BN_TYPE_ICONS[n.body_type] || '◈';
         const badges = [];
         if (n.body_type) badges.push(`<span class="bn-badge bn-badge-type">${icon} ${n.body_type}</span>`);
@@ -2437,7 +3015,7 @@ function renderBn() {
         if (n.atmo_type) badges.push(`<span class="bn-badge bn-badge-atmo">ATM: ${n.atmo_type}</span>`);
         if (n.bio_signals > 0) badges.push(`<span class="bn-badge bn-badge-bio">🌿 BIO ×${n.bio_signals}</span>`);
         if (n.geo_signals > 0) badges.push(`<span class="bn-badge bn-badge-geo">🌋 GEO ×${n.geo_signals}</span>`);
-        if (n.terraform)   badges.push(`<span class="bn-badge" style="border-color:rgba(0,200,80,0.5);color:#00C850">TF: ${n.terraform}</span>`);
+        if (n.terraform) badges.push(`<span class="bn-badge" style="border-color:rgba(0,200,80,0.5);color:#00C850">TF: ${n.terraform}</span>`);
         const coordCount = (n.coords || []).length;
         if (coordCount > 0) badges.push(`<span class="bn-badge" style="border-color:rgba(255,98,0,0.5);color:var(--ed-orange)">📍 ${coordCount} COORD${coordCount !== 1 ? 'S' : ''}</span>`);
 
@@ -2448,17 +3026,19 @@ function renderBn() {
         if (n.star_class) stats.push(`Class: <span>${n.star_class}</span>`);
 
         card.innerHTML =
-            `<div class="bn-body">${n.body_name}</div>` +
-            `<div class="bn-sys">◇ ${n.system} · ${edDateShort(n.ts)}</div>` +
+            (isCustom ? `<div class="bm-drag-handle" title="Drag to reorder">⠿</div>` : '') +
+            (n.pinned  ? `<div style="position:absolute;top:6px;right:10px;font-family:var(--font-mono);font-size:9px;color:var(--ed-orange);letter-spacing:2px;opacity:0.8">◈ PINNED</div>` : '') +
+            `<div class="bn-body" style="padding-left:${isCustom?'18px':'0'}">${n.body_name}</div>` +
+            `<div class="bn-sys" style="padding-left:${isCustom?'18px':'0'}">◇ ${n.system}${n.folder ? ` <span style="color:var(--text-dim);font-size:10px">· ◫ ${n.folder}</span>` : ''} · ${edDateShort(n.ts)}</div>` +
             (badges.length ? `<div class="bn-badges">${badges.join('')}</div>` : '') +
             (stats.length  ? `<div class="bn-stat-row">${stats.map(s=>`<div class="bn-stat">${s}</div>`).join('')}</div>` : '') +
             (n.notes ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;line-height:1.5">${n.notes}</div>` : '') +
             (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>` : '') +
             ((n.coords||[]).length ? `<div class="bn-coord-list">${
-                n.coords.map((c, ci) => {
-                    const latF = Number(c.lat).toFixed(4);
-                    const lonF = Number(c.lon).toFixed(4);
-                    const safeNote = (c.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                n.coords.map((co) => {
+                    const latF = Number(co.lat).toFixed(4);
+                    const lonF = Number(co.lon).toFixed(4);
+                    const safeNote = (co.note||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                     return `<div class="bn-coord-row">
                         <span style="color:var(--ed-orange);font-size:10px;flex-shrink:0">◈</span>
                         <span class="bn-coord-latlng">${latF}°, ${lonF}°</span>
@@ -2469,10 +3049,70 @@ function renderBn() {
             `<div class="entry-acts">
                 <button class="btn btn-sm" onclick="openBnViewModal('${n.id}')">View</button>
                 <button class="btn btn-c btn-sm" onclick="openBnModal('${n.id}')">Edit</button>
-                <button class="btn btn-d btn-sm" onclick="deleteBn('${n.id}')">Delete</button>
+                <button class="btn ${n.pinned?'btn-g':'btn-sm'} btn-sm" onclick="toggleBnPin('${n.id}')">${n.pinned?'◈ Unpin':'◈ Pin'}</button>
+                <button class="btn btn-d btn-sm" onclick="deleteBn('${n.id}')">Del</button>
             </div>`;
-        frag.appendChild(card);
-    });
+        return card;
+    }
+
+    const frag = document.createDocumentFragment();
+    const pinned   = fl.filter(n=>n.pinned);
+    const unpinned = fl.filter(n=>!n.pinned);
+
+    if (pinned.length > 0) {
+        const hdr = document.createElement('div');
+        hdr.className = 'bm-folder-hdr';
+        hdr.innerHTML = `<div class="bm-folder-hdr-line"></div><div class="bm-folder-hdr-lbl" style="color:var(--ed-orange);border-color:rgba(255,98,0,0.4)">◈ Pinned</div><div class="bm-folder-hdr-line"></div>`;
+        frag.appendChild(hdr);
+        pinned.forEach(n => frag.appendChild(makeCard(n)));
+    }
+
+    function makeBnFolderSection(fname, items) {
+        const isCollapsed = fname !== '__none__' && collapsedBnFolders.has(fname);
+        const hdr = document.createElement('div');
+        hdr.className = 'bm-folder-hdr' + (isCollapsed ? ' collapsed' : '');
+        const lbl = fname === '__none__' ? 'Uncategorised' : `◫ ${fname}`;
+        const chevron = fname === '__none__' ? '' : `<span class="bm-folder-chevron">▾</span>`;
+        const lblStyle = fname === '__none__' ? 'style="color:var(--text-dim)"' : '';
+        hdr.innerHTML = `<div class="bm-folder-hdr-line"></div><div class="bm-folder-hdr-lbl" ${lblStyle}>${chevron}${lbl}</div><div class="bm-folder-hdr-line"></div>`;
+
+        const body = document.createElement('div');
+        body.className = 'bm-folder-body' + (isCollapsed ? ' collapsed' : '');
+
+        if (fname !== '__none__') {
+            hdr.addEventListener('click', () => {
+                const nowCollapsed = collapsedBnFolders.has(fname);
+                if (nowCollapsed) { collapsedBnFolders.delete(fname); hdr.classList.remove('collapsed'); body.classList.remove('collapsed'); }
+                else              { collapsedBnFolders.add(fname);    hdr.classList.add('collapsed');    body.classList.add('collapsed'); }
+            });
+        }
+
+        items.forEach(n => body.appendChild(makeCard(n)));
+        frag.appendChild(hdr);
+        frag.appendChild(body);
+    }
+
+    if (!folderF) {
+        const byFolder = {};
+        const noFolder = [];
+        unpinned.forEach(n => {
+            const f = n.folder || '';
+            if (f) { (byFolder[f] = byFolder[f]||[]).push(n); }
+            else   { noFolder.push(n); }
+        });
+        const folderNames = Object.keys(byFolder).sort();
+        folderNames.forEach(fname => makeBnFolderSection(fname, byFolder[fname]));
+        if (noFolder.length > 0) {
+            if (folderNames.length > 0) {
+                makeBnFolderSection('__none__', noFolder);
+            } else {
+                noFolder.forEach(n => frag.appendChild(makeCard(n)));
+            }
+        }
+    } else {
+        unpinned.forEach(n => frag.appendChild(makeCard(n)));
+    }
+
     c.replaceChildren(frag);
 }
 

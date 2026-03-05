@@ -6,6 +6,7 @@ import {
   getSettings, saveSettings,
   getBodyNotes, saveBodyNotes,
   getDeletedItems, saveDeletedItems,
+  getFolders, saveFolders,
 } from '../utils/storage.js';
 import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop, deleteBodyNoteOnDesktop } from '../utils/syncService.js';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -31,6 +32,7 @@ export function useStore() {
   const [settings,   setSettingsState]   = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
   const [bodyNotes,  setBodyNotesState]  = useState([]);
   const [deletedItems, setDeletedItemsState] = useState([]);
+  const [folders,    setFoldersState]    = useState([]);
   const [ready,      setReady]           = useState(false);
 
   // Sync state
@@ -53,12 +55,14 @@ export function useStore() {
     (async () => {
       try {
         const [l, b, v, s, bn, di] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes(), getDeletedItems()]);
+        const fo = await getFolders();
         setLogsState(l);
         setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
         setBodyNotesState(bn || []);
         setDeletedItemsState(di || []);
+        setFoldersState(fo || []);
       } catch (e) {
         console.error('useStore: load error', e);
       } finally {
@@ -259,6 +263,26 @@ export function useStore() {
     deleteBodyNoteOnDesktop(id);
   }, []);
 
+  // ── Folders ──────────────────────────────────────────────────────────────────
+  const upsertFolder = useCallback(async (folder) => {
+    setFoldersState(prev => {
+      const idx = prev.findIndex(f => f.id === folder.id);
+      const next = idx >= 0
+        ? prev.map(f => f.id === folder.id ? folder : f)
+        : [...prev, folder];
+      saveFolders(next);
+      return next;
+    });
+  }, []);
+
+  const deleteFolder = useCallback(async (id) => {
+    setFoldersState(prev => {
+      const next = prev.filter(f => f.id !== id);
+      saveFolders(next);
+      return next;
+    });
+  }, []);
+
   // ── Visited ──────────────────────────────────────────────────────────────────
   const clearVisited = useCallback(async () => {
     setVisitedState([]);
@@ -323,5 +347,7 @@ export function useStore() {
     exportData, importData,
     // Sync
     syncStatus, syncError, lastSyncTime, triggerSync,
+    // Folders
+    folders, upsertFolder, deleteFolder,
   };
 }

@@ -99,6 +99,24 @@ async function initDB() {
         }
     } catch(e) { console.warn('body_notes coords migration skipped:', e.message); }
 
+    // Migration: add pinned, folder, sort_order columns to bookmarks
+    try {
+        const bmCols = queryAll(`PRAGMA table_info(bookmarks)`).map(r => r.name);
+        if (!bmCols.includes('pinned'))     db.run(`ALTER TABLE bookmarks ADD COLUMN pinned INTEGER DEFAULT 0`);
+        if (!bmCols.includes('folder'))     db.run(`ALTER TABLE bookmarks ADD COLUMN folder TEXT DEFAULT ''`);
+        if (!bmCols.includes('sort_order')) db.run(`ALTER TABLE bookmarks ADD COLUMN sort_order INTEGER DEFAULT 0`);
+        console.log('Bookmarks QOL columns ensured');
+    } catch(e) { console.warn('Bookmarks QOL migration skipped:', e.message); }
+
+    // Migration: add pinned, folder, sort_order columns to body_notes
+    try {
+        const bnQolCols = queryAll(`PRAGMA table_info(body_notes)`).map(r => r.name);
+        if (!bnQolCols.includes('pinned'))     db.run(`ALTER TABLE body_notes ADD COLUMN pinned INTEGER DEFAULT 0`);
+        if (!bnQolCols.includes('folder'))     db.run(`ALTER TABLE body_notes ADD COLUMN folder TEXT DEFAULT ''`);
+        if (!bnQolCols.includes('sort_order')) db.run(`ALTER TABLE body_notes ADD COLUMN sort_order INTEGER DEFAULT 0`);
+        console.log('Body notes QOL columns ensured');
+    } catch(e) { console.warn('Body notes QOL migration skipped:', e.message); }
+
     // Flush immediately on first init so the file exists
     flushDB();
 }
@@ -686,17 +704,24 @@ ipcMain.handle('logs:delete', (_, id) => {
 
 // ─── Bookmarks IPC ────────────────────────────────────────────────────────────
 ipcMain.handle('bookmarks:getAll', () =>
-    queryAll('SELECT * FROM bookmarks ORDER BY ts DESC')
-        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') }))
+    queryAll('SELECT * FROM bookmarks ORDER BY pinned DESC, sort_order ASC, ts DESC')
+        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), pinned: !!r.pinned }))
 );
 ipcMain.handle('bookmarks:save', (_, b) => {
-    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [b.id, b.ts, b.system, b.type||'POI', b.lat??null, b.lon??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[])]);
+    db.run(`INSERT OR REPLACE INTO bookmarks (id,ts,system,type,lat,lon,z,notes,tags,pinned,folder,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [b.id, b.ts, b.system, b.type||'POI', b.lat??null, b.lon??null, b.z??null, b.notes||'', JSON.stringify(b.tags||[]),
+         b.pinned?1:0, b.folder||'', b.sort_order??0]);
     saveDB(); return true;
 });
 ipcMain.handle('bookmarks:delete', (_, id) => {
     db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
     recordTombstone(id, 'bookmark');
+    saveDB(); return true;
+});
+ipcMain.handle('bookmarks:reorder', (_, orderedIds) => {
+    orderedIds.forEach((id, i) => {
+        db.run('UPDATE bookmarks SET sort_order = ? WHERE id = ?', [i, id]);
+    });
     saveDB(); return true;
 });
 
@@ -836,8 +861,8 @@ ipcMain.handle('import:json', async () => {
 
 // ── Body / Planet Notes ───────────────────────────────────────────────────────
 ipcMain.handle('bodynotes:getAll', () =>
-    queryAll('SELECT * FROM body_notes ORDER BY ts DESC')
-        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]'), landable: !!r.landable }))
+    queryAll('SELECT * FROM body_notes ORDER BY pinned DESC, sort_order ASC, ts DESC')
+        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]'), landable: !!r.landable, pinned: !!r.pinned }))
 );
 
 ipcMain.handle('bodynotes:save', (_, n) => {
@@ -845,11 +870,12 @@ ipcMain.handle('bodynotes:save', (_, n) => {
     const coords = JSON.stringify(n.coords || []);
     db.run(
         `INSERT OR REPLACE INTO body_notes
-         (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords,pinned,folder,sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [n.id, n.ts, n.system, n.body_name, n.body_type||'', n.star_class||'', n.atmo_type||'',
          n.gravity||null, n.landable?1:0, n.bio_signals||0, n.geo_signals||0,
-         n.terraform||'', n.distance_ls||null, n.value||0, n.notes||'', tags, coords]
+         n.terraform||'', n.distance_ls||null, n.value||0, n.notes||'', tags, coords,
+         n.pinned?1:0, n.folder||'', n.sort_order??0]
     );
     saveDB();
     return true;
@@ -860,4 +886,11 @@ ipcMain.handle('bodynotes:delete', (_, id) => {
     recordTombstone(id, 'body_note');
     saveDB();
     return true;
+});
+
+ipcMain.handle('bodynotes:reorder', (_, orderedIds) => {
+    orderedIds.forEach((id, i) => {
+        db.run('UPDATE body_notes SET sort_order = ? WHERE id = ?', [i, id]);
+    });
+    saveDB(); return true;
 });

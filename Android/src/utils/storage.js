@@ -84,3 +84,10 @@ export async function getDeletedItems() {
 export async function saveDeletedItems(items) {
   return storage.set('deleted_items', items);
 }
+
+export async function getFolders() {
+  return (await storage.get('folders')) || [];
+}
+export async function saveFolders(folders) {
+  return storage.set('folders', folders);
+}

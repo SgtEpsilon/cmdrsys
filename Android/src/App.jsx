@@ -149,6 +149,7 @@ export default function App() {
             currentSystem={store.settings.system}
             initialPrefill={pendingBookmark}
             onPrefillConsumed={() => setPendingBookmark(null)}
+            folders={store.folders}
           />
         )}
         {view === 'bodynotes' && (
@@ -157,6 +158,7 @@ export default function App() {
             upsertBodyNote={async (n) => { await store.upsertBodyNote(n); toast('⬡ Body note saved'); }}
             deleteBodyNote={async (id) => { await store.deleteBodyNote(id); toast('Body note deleted'); }}
             currentSystem={store.settings.system}
+            folders={store.folders}
           />
         )}
         {view === 'visited' && (
@@ -180,6 +182,9 @@ export default function App() {
             syncError={store.syncError}
             lastSyncTime={store.lastSyncTime}
             triggerSync={store.triggerSync}
+            folders={store.folders}
+            upsertFolder={store.upsertFolder}
+            deleteFolder={store.deleteFolder}
           />
         )}
       </main>
