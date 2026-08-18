@@ -1,7 +1,7 @@
 <div align="center">
 
 <img src="https://img.shields.io/badge/Elite%20Dangerous-F4A800?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTEyIDJMMyAyMGgxOEwxMiAyeiIvPjwvc3ZnPg==&logoColor=black" alt="Elite Dangerous"/>
-<img src="https://img.shields.io/badge/version-2.0.1-00D4FF?style=for-the-badge" alt="Version"/>
+<img src="https://img.shields.io/badge/version-2.2.0-00D4FF?style=for-the-badge" alt="Version"/>
 <img src="https://img.shields.io/badge/platform-Electron%20%7C%20Android-4A90D9?style=for-the-badge" alt="Platform"/>
 
 ```
@@ -89,7 +89,7 @@ npm run build:linux  # Linux (.AppImage)
 
 ### 📱 Android
 
-The prebuilt release APK is available in `android/app/release/cmdrsys-v2.0.apk`.
+The prebuilt release APK is available in `android/app/release/cmdrsys-v2.2.0.apk`.
 
 To build from source:
 
@@ -179,7 +179,7 @@ cmdrsys/
 │   │       └── edDate.js           # Elite Dangerous date formatting
 │   ├── android/                    # Native Android project (Gradle)
 │   │   └── app/release/
-│   │       └── cmdrsys-v2.0.apk    # Release APK
+│   │       └── cmdrsys-v2.2.0.apk    # Release APK
 │   └── vite.config.js
 │
 ├── 📄 android build and run.txt    # Android build guide
