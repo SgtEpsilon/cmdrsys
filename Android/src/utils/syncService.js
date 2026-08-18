@@ -121,13 +121,19 @@ export async function pullFromDesktop() {
   return data;
 }
 
-export async function pushToDesktop(bookmarks, logs) {
+export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems, visited) {
   const { url, token } = await getSyncConfig();
   if (!url) throw new Error('No sync URL configured');
   const res = await fetchWithRetry(`${url}/sync`, {
     method:  'POST',
     headers: authHeaders(token),
-    body:    JSON.stringify({ bookmarks: (bookmarks || []).map(normaliseBm), logs }),
+    body:    JSON.stringify({
+      bookmarks:     (bookmarks  || []).map(normaliseBm),
+      logs,
+      body_notes:    bodyNotes || [],
+      deleted_items: deletedItems || [],
+      visited:       visited || [],
+    }),
   });
   if (res.status === 401) throw new Error('Sync token mismatch — check token in Settings');
   if (!res.ok) throw new Error(`Desktop responded HTTP ${res.status}`);
@@ -154,8 +160,25 @@ export async function deleteLogOnDesktop(id) {
   } catch (_) { /* non-fatal */ }
 }
 
-export async function fullSync(localBookmarks, localLogs) {
+export async function deleteBodyNoteOnDesktop(id) {
+  const { url, token } = await getSyncConfig();
+  if (!url) return;
+  try {
+    await fetchWithTimeout(`${url}/sync/body-note/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: authHeaders(token),
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+export async function fullSync(localBookmarks, localLogs, localBodyNotes, localDeletedItems, localVisited) {
   const remote = await pullFromDesktop();
+
+  // Build a set of all tombstoned IDs (local + remote) for each type
+  const allDeleted = [...(localDeletedItems || []), ...(remote.deleted_items || [])];
+  const deletedSet = { bookmark: new Set(), log: new Set(), body_note: new Set() };
+  for (const { id, type } of allDeleted) {
+    if (deletedSet[type]) deletedSet[type].add(id);
+  }
 
   const bmMap = new Map((localBookmarks || []).map(b => [b.id, normaliseBm(b)]));
   for (const rb of (remote.bookmarks || [])) {
@@ -163,6 +186,8 @@ export async function fullSync(localBookmarks, localLogs) {
     const local  = bmMap.get(normed.id);
     if (!local || local.ts < normed.ts) bmMap.set(normed.id, normed);
   }
+  // Remove tombstoned bookmarks
+  for (const id of deletedSet.bookmark) bmMap.delete(id);
   const mergedBookmarks = [...bmMap.values()].sort((a, b) => b.ts - a.ts);
 
   const logMap = new Map((localLogs || []).map(l => [l.id, l]));
@@ -170,14 +195,39 @@ export async function fullSync(localBookmarks, localLogs) {
     const local = logMap.get(rl.id);
     if (!local || local.ts < rl.ts) logMap.set(rl.id, rl);
   }
+  for (const id of deletedSet.log) logMap.delete(id);
   const mergedLogs = [...logMap.values()].sort((a, b) => b.ts - a.ts);
 
-  await pushToDesktop(mergedBookmarks, mergedLogs);
+  const bnMap = new Map((localBodyNotes || []).map(n => [n.id, n]));
+  for (const rn of (remote.body_notes || [])) {
+    const local = bnMap.get(rn.id);
+    if (!local || local.ts < rn.ts) bnMap.set(rn.id, rn);
+  }
+  for (const id of deletedSet.body_note) bnMap.delete(id);
+  const mergedBodyNotes = [...bnMap.values()].sort((a, b) => b.ts - a.ts);
+
+  // Visited systems — EARLIEST ts wins per name (ts is first-visit time, the
+  // opposite of the "latest wins" rule above). No tombstones for these; the
+  // desktop's journal reading is the ongoing source of truth, this just also
+  // picks up anything Android learned via its manual journal-file import.
+  const visMap = new Map((localVisited || []).map(v => [v.name, v]));
+  for (const rv of (remote.visited || [])) {
+    const local = visMap.get(rv.name);
+    if (!local || rv.ts < local.ts) visMap.set(rv.name, rv);
+  }
+  const mergedVisited = [...visMap.values()].sort((a, b) => b.ts - a.ts);
+
+  // Push merged data + all tombstones so Electron stays in sync
+  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes, allDeleted, mergedVisited);
 
   return {
     bookmarks:           mergedBookmarks,
     logs:                mergedLogs,
+    bodyNotes:           mergedBodyNotes,
+    visited:             mergedVisited,
     settingsFromDesktop: remote.settings || {},
     schemaVersion:       remote.schema_version ?? 1,
+    // Return merged tombstone list so the caller can persist it locally
+    deletedItems:        allDeleted,
   };
 }

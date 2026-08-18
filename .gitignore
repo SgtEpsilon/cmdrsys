@@ -7,6 +7,7 @@ yarn-error.log*
 # ── Electron build output ─────────────────────────────────────────
 Electron/dist/
 Electron/out/
+Electron/*.rar
 
 # ── Android build output ──────────────────────────────────────────
 Android/android/app/build/
@@ -18,6 +19,7 @@ Android/android/local.properties
 # ── Capacitor ─────────────────────────────────────────────────────
 # Vite build output that Capacitor copies into the Android assets
 Android/dist/
+Android/android/app/src/main/assets/public/
 
 # ── Android Studio ────────────────────────────────────────────────
 *.iml
@@ -52,5 +54,11 @@ desktop.ini
 # ── Vite / build cache ────────────────────────────────────────────
 Android/.vite/
 .vite/
+
+# ── Puppeteer / browser cache ─────────────────────────────────────
+.cache/
+
+# ── Archives & generated docs ─────────────────────────────────────
 *.zip
+*.rar
 CMDRSYS_Feature_Roadmap.docx

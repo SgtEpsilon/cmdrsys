@@ -121,7 +121,7 @@ export default function SettingsView({
     setManualSyncing(true);
     try {
       const result = await triggerSync();
-      notify(`↔ Synced — ${result.bookmarks} bookmarks · ${result.logs} logs`);
+      notify(`↔ Synced — ${result.bookmarks} bookmarks · ${result.logs} logs · ${result.visited} systems`);
     } catch (e) {
       notify('⚠ Sync failed: ' + e.message);
     } finally {

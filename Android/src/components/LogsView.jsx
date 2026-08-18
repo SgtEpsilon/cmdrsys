@@ -10,6 +10,7 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
   const [modal,     setModal]     = useState(false);
   const [editing,   setEditing]   = useState(null);
   const [form,      setForm]      = useState(EMPTY_FORM);
+  const [viewModal, setViewModal] = useState(null);
 
   // Separate text search from tag filter
   const filtered = useMemo(() => {
@@ -152,8 +153,8 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
               </div>
             )}
             <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+              <Btn onClick={() => setViewModal(entry)} variant="orange" small>View</Btn>
               <Btn onClick={() => openEdit(entry)} variant="cyan" small>Edit</Btn>
-              <Btn onClick={() => handleDelete(entry.id)} variant="red" small>Delete</Btn>
             </div>
           </div>
         ))
@@ -169,9 +170,46 @@ export default function LogsView({ logs, upsertLog, deleteLog, currentSystem }) 
         <FormTextarea label="Log Entry"       value={form.content} onChange={set('content')} placeholder="Write your log entry..." rows={5} />
         <FormInput    label="Tags (comma separated)" value={form.tags} onChange={set('tags')} placeholder="exploration, combat..." />
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+          {editing && <Btn onClick={() => { handleDelete(editing); setModal(false); }} variant="red" small>Delete</Btn>}
           <Btn onClick={() => setModal(false)} variant="red" small>Cancel</Btn>
           <Btn onClick={handleSave} small disabled={!form.title.trim() || !form.content.trim()}>Save Entry</Btn>
         </div>
+      </Modal>
+
+      {/* ── Detail View Modal ── */}
+      <Modal open={!!viewModal} onClose={() => setViewModal(null)} title="Log Entry">
+        {viewModal && (() => {
+          const entry = viewModal;
+          return (
+            <div>
+              <div style={{ fontFamily: 'var(--font-hud)', fontSize: '18px', color: 'var(--ed-orange)', marginBottom: '4px' }}>{entry.title}</div>
+              {entry.system && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--ed-cyan)', marginBottom: '4px' }}>
+                  ◇ {entry.system}{entry.body ? ' / ' + entry.body : ''}
+                </div>
+              )}
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+                ◈ {edDate(entry.ts)}
+              </div>
+
+              <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.7, marginBottom: '14px', userSelect: 'text', WebkitUserSelect: 'text' }}>
+                {entry.content}
+              </div>
+
+              {entry.tags?.length > 0 && (
+                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  {entry.tags.map(t => <Tag key={t} label={t} />)}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Btn onClick={async () => { if (!window.confirm('Delete this log entry?')) return; await deleteLog(entry.id); setViewModal(null); }} variant="red" small>Delete</Btn>
+                <Btn onClick={() => { setViewModal(null); openEdit(entry); }} variant="cyan" small>Edit</Btn>
+                <Btn onClick={() => setViewModal(null)} variant="orange" small>Close</Btn>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

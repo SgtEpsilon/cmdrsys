@@ -4,8 +4,10 @@ import {
   getBookmarks, saveBookmarks,
   getVisited, saveVisited,
   getSettings, saveSettings,
+  getBodyNotes, saveBodyNotes,
+  getDeletedItems, saveDeletedItems,
 } from '../utils/storage.js';
-import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop } from '../utils/syncService.js';
+import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop, deleteBodyNoteOnDesktop } from '../utils/syncService.js';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
@@ -23,11 +25,13 @@ function normaliseBm(b) {
 const AUTO_SYNC_INTERVAL = 30_000;
 
 export function useStore() {
-  const [logs,      setLogsState]     = useState([]);
-  const [bookmarks, setBookmarksState] = useState([]);
-  const [visited,   setVisitedState]   = useState([]);
-  const [settings,  setSettingsState]  = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
-  const [ready,     setReady]          = useState(false);
+  const [logs,       setLogsState]      = useState([]);
+  const [bookmarks,  setBookmarksState]  = useState([]);
+  const [visited,    setVisitedState]    = useState([]);
+  const [settings,   setSettingsState]   = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
+  const [bodyNotes,  setBodyNotesState]  = useState([]);
+  const [deletedItems, setDeletedItemsState] = useState([]);
+  const [ready,      setReady]           = useState(false);
 
   // Sync state
   const [syncStatus,    setSyncStatus]    = useState('idle'); // 'idle' | 'syncing' | 'ok' | 'error'
@@ -37,18 +41,26 @@ export function useStore() {
   // Refs to avoid stale closures inside the interval
   const bookmarksRef = useRef([]);
   const logsRef      = useRef([]);
+  const bodyNotesRef = useRef([]);
+  const deletedItemsRef = useRef([]);
+  const visitedRef   = useRef([]);
   bookmarksRef.current = bookmarks;
   logsRef.current      = logs;
+  bodyNotesRef.current = bodyNotes;
+  deletedItemsRef.current = deletedItems;
+  visitedRef.current   = visited;
 
   // Load all data on mount
   useEffect(() => {
     (async () => {
       try {
-        const [l, b, v, s] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings()]);
+        const [l, b, v, s, bn, di] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes(), getDeletedItems()]);
         setLogsState(l);
         setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
+        setBodyNotesState(bn || []);
+        setDeletedItemsState(di || []);
       } catch (e) {
         console.error('useStore: load error', e);
       } finally {
@@ -70,7 +82,7 @@ export function useStore() {
       setSyncStatus('syncing');
       setSyncError('');
       try {
-        const result = await fullSync(bookmarksRef.current, logsRef.current);
+        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, visitedRef.current);
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
@@ -78,6 +90,22 @@ export function useStore() {
 
         await saveLogs(result.logs);
         setLogsState(result.logs);
+
+        await saveBodyNotes(result.bodyNotes);
+        setBodyNotesState(result.bodyNotes);
+
+        // Persist merged visited systems (journal-derived, kept in sync so no
+        // manual file copying is needed for this to reach Android)
+        if (result.visited) {
+          await saveVisited(result.visited);
+          setVisitedState(result.visited);
+        }
+
+        // Persist merged tombstone list (keeps deletions durable across restarts)
+        if (result.deletedItems) {
+          await saveDeletedItems(result.deletedItems);
+          setDeletedItemsState(result.deletedItems);
+        }
 
         // Optionally pull CMDR/ship/system from desktop if still unknown
         const ds = result.settingsFromDesktop;
@@ -115,13 +143,26 @@ export function useStore() {
     setSyncStatus('syncing');
     setSyncError('');
     try {
-      const result = await fullSync(bookmarksRef.current, logsRef.current);
+      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, visitedRef.current);
 
       await saveBookmarks(result.bookmarks);
       setBookmarksState(result.bookmarks.map(normaliseBm));
 
       await saveLogs(result.logs);
       setLogsState(result.logs);
+
+      await saveBodyNotes(result.bodyNotes);
+      setBodyNotesState(result.bodyNotes);
+
+      if (result.visited) {
+        await saveVisited(result.visited);
+        setVisitedState(result.visited);
+      }
+
+      if (result.deletedItems) {
+        await saveDeletedItems(result.deletedItems);
+        setDeletedItemsState(result.deletedItems);
+      }
 
       const ds = result.settingsFromDesktop;
       if (ds) {
@@ -137,7 +178,7 @@ export function useStore() {
 
       setSyncStatus('ok');
       setLastSyncTime(Date.now());
-      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length };
+      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length, bodyNotes: result.bodyNotes.length, visited: result.visited.length };
     } catch (e) {
       setSyncStatus('error');
       setSyncError(e.message);
@@ -163,6 +204,13 @@ export function useStore() {
       saveLogs(next);
       return next;
     });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'log', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'log')), tombstone];
+      saveDeletedItems(next);
+      return next;
+    });
     // Best-effort — propagate deletion to desktop if sync is configured
     deleteLogOnDesktop(id);
   }, []);
@@ -185,8 +233,44 @@ export function useStore() {
       saveBookmarks(next);
       return next;
     });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'bookmark', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'bookmark')), tombstone];
+      saveDeletedItems(next);
+      return next;
+    });
     // Best-effort — propagate deletion to desktop if sync is configured
     deleteBookmarkOnDesktop(id);
+  }, []);
+
+  // ── Body Notes ───────────────────────────────────────────────────────────────
+  const upsertBodyNote = useCallback(async (note) => {
+    setBodyNotesState(prev => {
+      const idx = prev.findIndex(n => n.id === note.id);
+      const next = idx >= 0
+        ? prev.map(n => n.id === note.id ? note : n)
+        : [note, ...prev];
+      saveBodyNotes(next);
+      return next;
+    });
+  }, []);
+
+  const deleteBodyNote = useCallback(async (id) => {
+    setBodyNotesState(prev => {
+      const next = prev.filter(n => n.id !== id);
+      saveBodyNotes(next);
+      return next;
+    });
+    // Record tombstone so the deletion propagates to desktop on next sync
+    const tombstone = { id, type: 'body_note', deleted_at: Date.now() };
+    setDeletedItemsState(prev => {
+      const next = [...prev.filter(d => !(d.id === id && d.type === 'body_note')), tombstone];
+      saveDeletedItems(next);
+      return next;
+    });
+    // Best-effort — propagate deletion to desktop if sync is configured
+    deleteBodyNoteOnDesktop(id);
   }, []);
 
   // ── Visited ──────────────────────────────────────────────────────────────────
@@ -206,7 +290,9 @@ export function useStore() {
 
   // ── Import / Export ──────────────────────────────────────────────────────────
   const exportData = useCallback(async () => {
-    const payload = JSON.stringify({ logs, bookmarks, visited, settings }, null, 2);
+    // Include everything a restore needs — body notes and deletion tombstones
+    // were previously left out, so a "backup" silently lost them.
+    const payload = JSON.stringify({ logs, bookmarks, visited, settings, bodyNotes, deletedItems }, null, 2);
     const fileName = `cmdrsys-backup-${Date.now()}.json`;
     try {
       // Write to the app's cache directory (always writable, no permissions needed)
@@ -228,15 +314,17 @@ export function useStore() {
       console.error('Export failed:', e);
       throw new Error('Export failed: ' + e.message);
     }
-  }, [logs, bookmarks, visited, settings]);
+  }, [logs, bookmarks, visited, settings, bodyNotes, deletedItems]);
 
   const importData = useCallback(async (jsonText) => {
     try {
       const data = JSON.parse(jsonText);
-      if (data.logs)      { await saveLogs(data.logs);           setLogsState(data.logs); }
-      if (data.bookmarks) { await saveBookmarks(data.bookmarks); setBookmarksState(data.bookmarks); }
-      if (data.visited)   { await saveVisited(data.visited);     setVisitedState(data.visited); }
-      if (data.settings)  { await saveSettings(data.settings);   setSettingsState(s => ({ ...s, ...data.settings })); }
+      if (data.logs)        { await saveLogs(data.logs);               setLogsState(data.logs); }
+      if (data.bookmarks)   { await saveBookmarks(data.bookmarks);     setBookmarksState(data.bookmarks); }
+      if (data.visited)     { await saveVisited(data.visited);         setVisitedState(data.visited); }
+      if (data.settings)    { await saveSettings(data.settings);       setSettingsState(s => ({ ...s, ...data.settings })); }
+      if (data.bodyNotes)   { await saveBodyNotes(data.bodyNotes);     setBodyNotesState(data.bodyNotes); }
+      if (data.deletedItems){ await saveDeletedItems(data.deletedItems); setDeletedItemsState(data.deletedItems); }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };
@@ -247,6 +335,7 @@ export function useStore() {
     ready,
     logs, upsertLog, deleteLog,
     bookmarks, upsertBookmark, deleteBookmark,
+    bodyNotes, upsertBodyNote, deleteBodyNote,
     visited, clearVisited,
     settings, updateSettings,
     exportData, importData,

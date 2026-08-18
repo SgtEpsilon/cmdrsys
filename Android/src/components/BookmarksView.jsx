@@ -26,6 +26,7 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
   const [modal,    setModal]    = useState(false);
   const [editing,  setEditing]  = useState(null);
   const [form,     setForm]     = useState(EMPTY_FORM);
+  const [viewModal, setViewModal] = useState(null);
 
   // Separate text search from tag filter
   const filtered = useMemo(() => {
@@ -179,8 +180,8 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                    <Btn onClick={() => setViewModal(bm)} variant="orange" small>View</Btn>
                     <Btn onClick={() => openEdit(bm)} variant="cyan" small>Edit</Btn>
-                    <Btn onClick={() => handleDelete(bm.id)} variant="red" small>Del</Btn>
                   </div>
                 </div>
               );
@@ -203,9 +204,50 @@ export default function BookmarksView({ bookmarks, upsertBookmark, deleteBookmar
         <FormTextarea label="Notes" value={form.notes} onChange={set('notes')} placeholder="Interesting features, resources..." rows={3} />
         <FormInput    label="Tags (comma separated)" value={form.tags} onChange={set('tags')} placeholder="nebula, earth-like, neutron..." />
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+          {editing && <Btn onClick={() => { handleDelete(editing); setModal(false); }} variant="red" small>Delete</Btn>}
           <Btn onClick={() => setModal(false)} variant="red" small>Cancel</Btn>
           <Btn onClick={handleSave} variant="cyan" small disabled={!form.system.trim()}>Save Bookmark</Btn>
         </div>
+      </Modal>
+
+      {/* ── Detail View Modal ── */}
+      <Modal open={!!viewModal} onClose={() => setViewModal(null)} title="Bookmark Detail" cyan>
+        {viewModal && (() => {
+          const bm = viewModal;
+          const hasCoords = bm.lat != null && bm.lon != null;
+          return (
+            <div>
+              <div style={{ fontFamily: 'var(--font-hud)', fontSize: '18px', color: 'var(--ed-cyan)', marginBottom: '4px' }}>{bm.system}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '2px', color: TYPE_COLOR[bm.type] || '#4A6A8A', marginBottom: '16px' }}>{bm.type}</div>
+
+              {hasCoords && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '12px', padding: '8px 10px', border: '1px solid rgba(0,212,255,0.15)', background: 'rgba(5,14,24,0.7)' }}>
+                  <span style={{ color: 'var(--ed-cyan)' }}>Lat:</span> {bm.lat}{'  '}
+                  <span style={{ color: 'var(--ed-cyan)' }}>Lon:</span> {bm.lon}
+                  {bm.z != null && <>{' '}<span style={{ color: 'var(--ed-cyan)' }}>Alt:</span> {bm.z}</>}
+                </div>
+              )}
+
+              {bm.notes && (
+                <div style={{ fontSize: '14px', color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: '14px', userSelect: 'text', WebkitUserSelect: 'text' }}>
+                  {bm.notes}
+                </div>
+              )}
+
+              {bm.tags?.length > 0 && (
+                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  {bm.tags.map(t => <Tag key={t} label={t} />)}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Btn onClick={async () => { if (!window.confirm('Delete this bookmark?')) return; await deleteBookmark(bm.id); setViewModal(null); }} variant="red" small>Delete</Btn>
+                <Btn onClick={() => { setViewModal(null); openEdit(bm); }} variant="cyan" small>Edit</Btn>
+                <Btn onClick={() => setViewModal(null)} variant="orange" small>Close</Btn>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

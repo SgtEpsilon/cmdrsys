@@ -39,6 +39,10 @@ contextBridge.exposeInMainWorld('api', {
     onJournalProgress: (cb) => ipcRenderer.on('journal:progress',   (_, p)   => cb(p)),
     onJournalEvents:   (cb) => ipcRenderer.on('journal:newEvents',  (_, evs) => cb(evs)),
     onMetaUpdate:      (cb) => ipcRenderer.on('journal:metaUpdate', (_, meta) => cb(meta)),
+    // Fired once a background journal load (auto-load on startup, or a
+    // manual pick via openJournal) finishes — the app is already usable
+    // the whole time this is loading, this just fills in the results.
+    onJournalAutoLoadComplete: (cb) => ipcRenderer.on('journal:autoLoadComplete', (_, r) => cb(r)),
 
     // Sync server
     getSyncInfo:  ()      => ipcRenderer.invoke('sync:getInfo'),
@@ -48,6 +52,13 @@ contextBridge.exposeInMainWorld('api', {
     onSyncServerStarted: (cb) => ipcRenderer.on('sync:serverStarted', (_, info) => cb(info)),
     onSyncDataUpdated:   (cb) => ipcRenderer.on('sync:dataUpdated',   ()         => cb()),
     onSyncIpChanged:     (cb) => ipcRenderer.on('sync:ipChanged',     (_, info)  => cb(info)),
+
+    // Body Notes
+    getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
+    saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
+    deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    // Open URL in system browser
+    openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 
     // Export / Import
     exportJSON: () => ipcRenderer.invoke('export:json'),

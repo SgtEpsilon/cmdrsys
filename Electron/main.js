@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { Worker } = require('worker_threads');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
@@ -53,6 +54,31 @@ async function initDB() {
             name TEXT PRIMARY KEY,
             ts   INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS body_notes (
+            id          TEXT PRIMARY KEY,
+            ts          INTEGER NOT NULL,
+            system      TEXT NOT NULL,
+            body_name   TEXT NOT NULL,
+            body_type   TEXT,
+            star_class  TEXT,
+            atmo_type   TEXT,
+            gravity     REAL,
+            landable    INTEGER DEFAULT 0,
+            bio_signals INTEGER DEFAULT 0,
+            geo_signals INTEGER DEFAULT 0,
+            terraform   TEXT,
+            distance_ls REAL,
+            value       INTEGER DEFAULT 0,
+            notes       TEXT,
+            tags        TEXT DEFAULT '[]',
+            coords      TEXT DEFAULT '[]'
+        );
+        CREATE TABLE IF NOT EXISTS deleted_items (
+            id         TEXT NOT NULL,
+            type       TEXT NOT NULL,
+            deleted_at INTEGER NOT NULL,
+            PRIMARY KEY (id, type)
+        );
     `);
 
     // Migration: rename x/y columns to lat/lon if they still exist from an older DB
@@ -64,6 +90,15 @@ async function initDB() {
             console.log('Migrated bookmarks: x→lat, y→lon');
         }
     } catch(e) { console.warn('Migration check skipped:', e.message); }
+
+    // Migration: add coords column to body_notes if missing
+    try {
+        const bnCols = queryAll(`PRAGMA table_info(body_notes)`).map(r => r.name);
+        if (!bnCols.includes('coords')) {
+            db.run(`ALTER TABLE body_notes ADD COLUMN coords TEXT DEFAULT '[]'`);
+            console.log('Migrated body_notes: added coords column');
+        }
+    } catch(e) { console.warn('body_notes coords migration skipped:', e.message); }
 
     // Flush immediately on first init so the file exists
     flushDB();
@@ -98,6 +133,42 @@ function queryAll(sql, params = []) {
 }
 function queryGet(sql, params = []) { return queryAll(sql, params)[0] || null; }
 
+// ─── Tombstone helpers ────────────────────────────────────────────────────────
+function recordTombstone(id, type) {
+    db.run(
+        'INSERT OR REPLACE INTO deleted_items (id, type, deleted_at) VALUES (?, ?, ?)',
+        [id, type, Date.now()]
+    );
+}
+
+function getTombstones() {
+    return queryAll('SELECT id, type, deleted_at FROM deleted_items');
+}
+
+// Apply a list of tombstones received from Android: delete matching live rows
+function applyTombstones(tombstones) {
+    if (!Array.isArray(tombstones)) return false;
+    let changed = false;
+    for (const { id, type, deleted_at } of tombstones) {
+        // Record locally so we don't re-push the item later
+        db.run(
+            'INSERT OR REPLACE INTO deleted_items (id, type, deleted_at) VALUES (?, ?, ?)',
+            [id, type, deleted_at ?? Date.now()]
+        );
+        if (type === 'bookmark') {
+            const exists = queryGet('SELECT id FROM bookmarks WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM bookmarks WHERE id = ?', [id]); changed = true; }
+        } else if (type === 'log') {
+            const exists = queryGet('SELECT id FROM logs WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM logs WHERE id = ?', [id]); changed = true; }
+        } else if (type === 'body_note') {
+            const exists = queryGet('SELECT id FROM body_notes WHERE id = ?', [id]);
+            if (exists) { db.run('DELETE FROM body_notes WHERE id = ?', [id]); changed = true; }
+        }
+    }
+    return changed;
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function getSetting(key, def = '') {
     const row = queryGet('SELECT value FROM settings WHERE key = ?', [key]);
@@ -125,80 +196,96 @@ function getDefaultJournalDir() {
     return fs.existsSync(proton) ? proton : null;
 }
 
-function getAllJournalFiles(dir) {
-    if (!dir || !fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
-        .filter(f => /^Journal\.\d{4}-\d{2}-\d{2}T\d{6}\.\d{2}\.log$/.test(f))
-        .sort()                          // lexicographic == chronological for this format
-        .map(f => path.join(dir, f));
-}
+// (Journal file discovery now lives in journalWorker.js, alongside the rest
+// of the parsing — see startJournalLoad below.)
 
-// ─── Journal loading — runs AFTER window opens ────────────────────────────────
-let journalWatcher  = null;
-let journalPath     = null;
-let lastFileSize    = 0;
+// ─── Journal loading — runs in a background worker thread ────────────────────
+// Journal files can span years of play and many MB, so reading + parsing them
+// happens off the main thread (see journalWorker.js). This keeps the main
+// process free the whole time to handle note/log/bookmark saves and other IPC
+// — the app stays fully usable while journals load in the background.
+let journalWatcher    = null;
+let journalPath       = null;
+let lastFileSize      = 0;
+let journalLoadWorker = null;   // the in-flight background load, if any
 
 // In-memory journal events — NOT stored in SQLite (avoids huge DB writes)
 // We re-parse from files on each startup; only visited/meta is persisted.
 let memEvents = [];
 
-function loadAllJournals(journalDir) {
-    const files = getAllJournalFiles(journalDir);
-    if (files.length === 0) return { ok: false, reason: 'No journal files found in ' + journalDir };
-
-    memEvents = [];
-    let cmdr = '', ship = '', system = '';
-
-    // Use a single prepared statement for visited inserts
-    const visitStmt = db.prepare('INSERT OR IGNORE INTO visited (name, ts) VALUES (?, ?)');
-
-    for (const file of files) {
-        let text;
-        try { text = fs.readFileSync(file, 'utf8'); }
-        catch (e) { console.warn('Cannot read', file, e.message); continue; }
-
-        const lines = text.split('\n');
-        for (const line of lines) {
-            const ev = parseLine(line);
-            if (!ev) continue;
-            memEvents.push(ev);
-
-            if (ev.event === 'Commander' && ev.Name)  cmdr   = ev.Name;
-            if (ev.event === 'LoadGame'  && ev.Ship)  ship   = (ev.Ship_Localised || ev.Ship).toUpperCase();
-            if (['FSDJump', 'CarrierJump', 'Location'].includes(ev.event) && ev.StarSystem) {
-                system = ev.StarSystem;
-                visitStmt.run([ev.StarSystem, ev.timestamp ? new Date(ev.timestamp).getTime() : Date.now()]);
-            }
-        }
-
-        // Send progress update to renderer so the UI can show a loading bar
-        if (win && !win.isDestroyed()) {
-            win.webContents.send('journal:progress', {
-                file:  path.basename(file),
-                done:  files.indexOf(file) + 1,
-                total: files.length,
-            });
-        }
+// Starts a background load of every journal file in `journalDir`. Resolves
+// once parsing is done AND the resulting visited/settings rows have been
+// written to the DB. Progress is streamed to the renderer via
+// 'journal:progress' as each file finishes, so UI code should not await this
+// before letting the user interact with the rest of the app — see
+// 'renderer:ready' and 'journal:open' below. Cancels any load already in
+// flight before starting a new one.
+function startJournalLoad(journalDir) {
+    if (journalLoadWorker) {
+        journalLoadWorker.terminate();
+        journalLoadWorker = null;
     }
 
-    visitStmt.free();
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(path.join(__dirname, 'journalWorker.js'), {
+            workerData: { journalDir },
+        });
+        journalLoadWorker = worker;
 
-    // Persist derived metadata in one flush
-    if (cmdr)   setSetting('cmdr',   cmdr);
-    if (ship)   setSetting('ship',   ship);
-    if (system) setSetting('system', system);
-    flushDB();  // single flush for entire load
+        worker.on('message', async (msg) => {
+            if (msg.type === 'progress') {
+                if (win && !win.isDestroyed()) win.webContents.send('journal:progress', msg);
+                return;
+            }
+            if (msg.type === 'warn') {
+                console.warn(msg.message);
+                return;
+            }
+            if (msg.type === 'error') {
+                journalLoadWorker = null;
+                worker.terminate();
+                reject(new Error(msg.reason));
+                return;
+            }
+            if (msg.type === 'done') {
+                // Apply results on the main thread, in small batches — even
+                // though this is just fast in-memory DB inserts (no more file
+                // I/O), we yield periodically so a very long visited-systems
+                // list still can't itself hold up other IPC for long.
+                const visitStmt = db.prepare('INSERT OR IGNORE INTO visited (name, ts) VALUES (?, ?)');
+                for (let i = 0; i < msg.visited.length; i++) {
+                    visitStmt.run([msg.visited[i].name, msg.visited[i].ts]);
+                    if (i % 200 === 199) await new Promise(r => setImmediate(r));
+                }
+                visitStmt.free();
 
-    // Watch the latest file live
-    startWatcher(files[files.length - 1]);
+                if (msg.cmdr)   setSetting('cmdr',   msg.cmdr);
+                if (msg.ship)   setSetting('ship',   msg.ship);
+                if (msg.system) setSetting('system', msg.system);
+                flushDB();
 
-    return {
-        ok:        true,
-        fileCount: files.length,
-        latestFile: path.basename(files[files.length - 1]),
-        count:     memEvents.length,
-        cmdr, ship, system,
-    };
+                memEvents = msg.events;
+                startWatcher(msg.latestFile);
+
+                journalLoadWorker = null;
+                worker.terminate();
+                resolve({
+                    ok:         true,
+                    fileCount:  msg.fileCount,
+                    latestFile: path.basename(msg.latestFile),
+                    count:      memEvents.length,
+                    cmdr:       msg.cmdr,
+                    ship:       msg.ship,
+                    system:     msg.system,
+                });
+            }
+        });
+
+        worker.on('error', (e) => {
+            journalLoadWorker = null;
+            reject(e);
+        });
+    });
 }
 
 function startWatcher(file) {
@@ -315,11 +402,18 @@ function startSyncServer() {
                                     .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
                     logs:      queryAll('SELECT * FROM logs ORDER BY ts DESC')
                                     .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })),
+                    body_notes: queryAll('SELECT * FROM body_notes ORDER BY ts DESC')
+                                    .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]') })),
+                    // Journal-derived visited systems — kept in sync too, so Android
+                    // reflects what the desktop's journal reading has found without
+                    // any manual file copying.
+                    visited:   queryAll('SELECT * FROM visited ORDER BY ts DESC'),
                     settings: {
                         cmdr:   getSetting('cmdr'),
                         ship:   getSetting('ship'),
                         system: getSetting('system'),
                     },
+                    deleted_items: getTombstones(),
                     ts: Date.now(),
                     schema_version: 2,   // v2 uses lat/lon instead of x/y
                 };
@@ -335,11 +429,13 @@ function startSyncServer() {
             try {
                 const bmCount  = queryGet('SELECT COUNT(*) as n FROM bookmarks')?.n ?? 0;
                 const logCount = queryGet('SELECT COUNT(*) as n FROM logs')?.n ?? 0;
+                const bnCount  = queryGet('SELECT COUNT(*) as n FROM body_notes')?.n ?? 0;
+                const visCount = queryGet('SELECT COUNT(*) as n FROM visited')?.n ?? 0;
                 res.writeHead(200);
                 res.end(JSON.stringify({
                     ok: true, app: 'CMDRSYS', schema_version: 2,
                     ts: Date.now(),
-                    counts: { bookmarks: bmCount, logs: logCount },
+                    counts: { bookmarks: bmCount, logs: logCount, body_notes: bnCount, visited: visCount },
                     cmdr: getSetting('cmdr'), system: getSetting('system'),
                 }));
             } catch (e) {
@@ -356,10 +452,16 @@ function startSyncServer() {
                     const data = JSON.parse(body);
                     let changed = false;
 
+                    // Apply tombstones FIRST — removes items deleted on Android
+                    // before we merge live data so they don't get resurrected
+                    if (applyTombstones(data.deleted_items)) changed = true;
+
                     // Merge bookmarks — last ts wins per id
                     // Accept both legacy {x,y} and new {lat,lon} field names from Android
                     if (Array.isArray(data.bookmarks)) {
                         data.bookmarks.forEach(b => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [b.id, 'bookmark']);
+                            if (tombstone) return; // deleted — don't resurrect
                             const existing = queryGet('SELECT ts FROM bookmarks WHERE id = ?', [b.id]);
                             if (!existing || existing.ts < b.ts) {
                                 const lat = b.lat ?? b.x ?? null;
@@ -380,6 +482,8 @@ function startSyncServer() {
                     // Merge logs — last ts wins per id
                     if (Array.isArray(data.logs)) {
                         data.logs.forEach(l => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [l.id, 'log']);
+                            if (tombstone) return; // deleted — don't resurrect
                             const existing = queryGet('SELECT ts FROM logs WHERE id = ?', [l.id]);
                             if (!existing || existing.ts < l.ts) {
                                 db.run(
@@ -389,6 +493,47 @@ function startSyncServer() {
                                     [l.id, l.ts, l.title, l.system || '',
                                      l.body || '', l.content, JSON.stringify(l.tags || [])]
                                 );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    // Merge body_notes — last ts wins per id
+                    if (Array.isArray(data.body_notes)) {
+                        data.body_notes.forEach(n => {
+                            const tombstone = queryGet('SELECT id FROM deleted_items WHERE id = ? AND type = ?', [n.id, 'body_note']);
+                            if (tombstone) return; // deleted — don't resurrect
+                            const existing = queryGet('SELECT ts FROM body_notes WHERE id = ?', [n.id]);
+                            if (!existing || existing.ts < n.ts) {
+                                db.run(
+                                    `INSERT OR REPLACE INTO body_notes
+                                     (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,
+                                      landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
+                                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                    [n.id, n.ts, n.system, n.body_name, n.body_type || null,
+                                     n.star_class || null, n.atmo_type || null, n.gravity ?? null,
+                                     n.landable ? 1 : 0, n.bio_signals ?? 0, n.geo_signals ?? 0,
+                                     n.terraform || null, n.distance_ls ?? null, n.value ?? 0,
+                                     n.notes || '', JSON.stringify(n.tags || []), JSON.stringify(n.coords || [])]
+                                );
+                                changed = true;
+                            }
+                        });
+                    }
+
+                    // Merge visited systems — EARLIEST ts wins per name (ts is
+                    // first-visit time, unlike the other collections above where
+                    // latest edit wins). Covers systems Android learned about via
+                    // its manual journal-file import that the desktop hasn't seen.
+                    if (Array.isArray(data.visited)) {
+                        data.visited.forEach(v => {
+                            if (!v || !v.name) return;
+                            const existing = queryGet('SELECT ts FROM visited WHERE name = ?', [v.name]);
+                            if (!existing) {
+                                db.run('INSERT INTO visited (name, ts) VALUES (?, ?)', [v.name, v.ts]);
+                                changed = true;
+                            } else if (v.ts < existing.ts) {
+                                db.run('UPDATE visited SET ts = ? WHERE name = ?', [v.ts, v.name]);
                                 changed = true;
                             }
                         });
@@ -421,6 +566,7 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/bookmark/'.length));
             try {
                 db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+                recordTombstone(id, 'bookmark');
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -435,6 +581,22 @@ function startSyncServer() {
             const id = decodeURIComponent(req.url.slice('/sync/log/'.length));
             try {
                 db.run('DELETE FROM logs WHERE id = ?', [id]);
+                recordTombstone(id, 'log');
+                saveDB();
+                if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
+                res.writeHead(200);
+                res.end(JSON.stringify({ ok: true, deleted: id }));
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: e.message }));
+            }
+
+        // ── DELETE /sync/body-note/:id — Android deletes a body note ─────────
+        } else if (req.method === 'DELETE' && req.url.startsWith('/sync/body-note/')) {
+            const id = decodeURIComponent(req.url.slice('/sync/body-note/'.length));
+            try {
+                db.run('DELETE FROM body_notes WHERE id = ?', [id]);
+                recordTombstone(id, 'body_note');
                 saveDB();
                 if (win && !win.isDestroyed()) win.webContents.send('sync:dataUpdated');
                 res.writeHead(200);
@@ -508,6 +670,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
     if (journalWatcher) journalWatcher.close();
+    if (journalLoadWorker) journalLoadWorker.terminate();
     stopSyncServer();
     if (process.platform !== 'darwin') app.quit();
 });
@@ -516,8 +679,14 @@ app.on('window-all-closed', () => {
 ipcMain.on('window:minimize', () => win.minimize());
 ipcMain.on('window:maximize', () => win.isMaximized() ? win.unmaximize() : win.maximize());
 ipcMain.on('window:close',    () => win.close());
+ipcMain.handle('shell:openExternal', (_, url) => shell.openExternal(url));
 
 // ─── renderer:ready — triggered by renderer on mount ─────────────────────────
+// Returns immediately — journal loading runs in the background (see
+// startJournalLoad) and reports progress/completion via 'journal:progress'
+// and 'journal:autoLoadComplete', so the renderer never has to sit on a
+// loading screen: it can mount the real UI and let the user read/edit their
+// own notes right away while journals load behind the scenes.
 ipcMain.handle('renderer:ready', () => {
     const savedDir   = getSetting('journal_dir', '');
     const journalDir = savedDir || getDefaultJournalDir();
@@ -526,13 +695,16 @@ ipcMain.handle('renderer:ready', () => {
         return { autoLoaded: false, reason: 'No journal directory found' };
     }
 
-    try {
-        const result = loadAllJournals(journalDir);
-        return { autoLoaded: true, ...result };
-    } catch (e) {
-        console.error('Auto-load failed:', e);
-        return { autoLoaded: false, reason: e.message };
-    }
+    startJournalLoad(journalDir)
+        .then(result => {
+            if (win && !win.isDestroyed()) win.webContents.send('journal:autoLoadComplete', { ok: true, ...result });
+        })
+        .catch(e => {
+            console.error('Auto-load failed:', e);
+            if (win && !win.isDestroyed()) win.webContents.send('journal:autoLoadComplete', { ok: false, reason: e.message });
+        });
+
+    return { autoLoaded: true, pending: true };
 });
 
 // ─── Settings IPC ─────────────────────────────────────────────────────────────
@@ -557,6 +729,7 @@ ipcMain.handle('logs:save', (_, e) => {
 });
 ipcMain.handle('logs:delete', (_, id) => {
     db.run('DELETE FROM logs WHERE id = ?', [id]);
+    recordTombstone(id, 'log');
     saveDB(); return true;
 });
 
@@ -572,6 +745,7 @@ ipcMain.handle('bookmarks:save', (_, b) => {
 });
 ipcMain.handle('bookmarks:delete', (_, id) => {
     db.run('DELETE FROM bookmarks WHERE id = ?', [id]);
+    recordTombstone(id, 'bookmark');
     saveDB(); return true;
 });
 
@@ -591,6 +765,10 @@ ipcMain.handle('journal:getEvents', () => memEvents);
 ipcMain.handle('journal:clearEvents', () => { memEvents = []; return true; });
 
 // ─── journal:open — user manually picks a journal file/folder ─────────────────
+// Same background-loading approach as renderer:ready: return as soon as the
+// directory is chosen, then let startJournalLoad report back via
+// 'journal:autoLoadComplete' once it's actually done. The rest of the app
+// (notes, bookmarks, logs) stays fully usable while it loads.
 ipcMain.handle('journal:open', async () => {
     const { filePaths } = await dialog.showOpenDialog(win, {
         title:      'Select any Elite Dangerous Journal File',
@@ -603,12 +781,15 @@ ipcMain.handle('journal:open', async () => {
     setSetting('journal_dir', chosenDir);
     saveDB();
 
-    try {
-        const result = loadAllJournals(chosenDir);
-        return { ok: true, ...result };
-    } catch (e) {
-        return { ok: false, reason: e.message };
-    }
+    startJournalLoad(chosenDir)
+        .then(result => {
+            if (win && !win.isDestroyed()) win.webContents.send('journal:autoLoadComplete', { ok: true, ...result });
+        })
+        .catch(e => {
+            if (win && !win.isDestroyed()) win.webContents.send('journal:autoLoadComplete', { ok: false, reason: e.message });
+        });
+
+    return { ok: true, pending: true };
 });
 
 ipcMain.handle('journal:stopWatch', () => {
@@ -657,12 +838,17 @@ ipcMain.handle('export:json', async () => {
     if (!filePath) return { ok: false };
 
     const data = {
-        version:   '1.0',
-        exported:  new Date().toISOString(),
-        settings:  queryAll('SELECT * FROM settings'),
-        logs:      queryAll('SELECT * FROM logs'),
-        bookmarks: queryAll('SELECT * FROM bookmarks'),
-        visited:   queryAll('SELECT * FROM visited'),
+        version:      '1.0',
+        exported:     new Date().toISOString(),
+        settings:     queryAll('SELECT * FROM settings'),
+        logs:         queryAll('SELECT * FROM logs'),
+        bookmarks:    queryAll('SELECT * FROM bookmarks'),
+        visited:      queryAll('SELECT * FROM visited'),
+        // Previously omitted — a "backup" silently lost body notes and any
+        // pending deletion tombstones (which stop deleted items reappearing
+        // via sync) on restore.
+        bodyNotes:    queryAll('SELECT * FROM body_notes'),
+        deletedItems: queryAll('SELECT * FROM deleted_items'),
     };
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return { ok: true, path: filePath };
@@ -700,11 +886,55 @@ ipcMain.handle('import:json', async () => {
                 [r.id, r.ts, r.system, r.type || 'POI', lat, lon, r.z ?? null, r.notes || '', tags]
             );
         });
-        if (data.visited)   data.visited.forEach(r    => db.run('INSERT OR IGNORE INTO visited (name,ts) VALUES (?,?)', [r.name, r.ts]));
+        if (data.visited)      data.visited.forEach(r => db.run('INSERT OR IGNORE INTO visited (name,ts) VALUES (?,?)', [r.name, r.ts]));
+        if (data.bodyNotes)    data.bodyNotes.forEach(r => {
+            const tags   = typeof r.tags   === 'string' ? r.tags   : JSON.stringify(r.tags   || []);
+            const coords = typeof r.coords === 'string' ? r.coords : JSON.stringify(r.coords || []);
+            db.run(
+                `INSERT OR REPLACE INTO body_notes
+                 (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [r.id, r.ts, r.system, r.body_name, r.body_type||'', r.star_class||'', r.atmo_type||'',
+                 r.gravity||null, r.landable?1:0, r.bio_signals||0, r.geo_signals||0,
+                 r.terraform||'', r.distance_ls||null, r.value||0, r.notes||'', tags, coords]
+            );
+        });
+        if (data.deletedItems) data.deletedItems.forEach(r => db.run(
+            'INSERT OR REPLACE INTO deleted_items (id,type,deleted_at) VALUES (?,?,?)',
+            [r.id, r.type, r.deleted_at]
+        ));
         flushDB();
         return { ok: true };
     } catch (e) {
         console.error('Import error:', e);
         return { ok: false, error: e.message };
     }
+});
+
+// ── Body / Planet Notes ───────────────────────────────────────────────────────
+ipcMain.handle('bodynotes:getAll', () =>
+    queryAll('SELECT * FROM body_notes ORDER BY ts DESC')
+        .map(r => ({ ...r, tags: JSON.parse(r.tags || '[]'), coords: JSON.parse(r.coords || '[]'), landable: !!r.landable }))
+);
+
+ipcMain.handle('bodynotes:save', (_, n) => {
+    const tags   = JSON.stringify(n.tags   || []);
+    const coords = JSON.stringify(n.coords || []);
+    db.run(
+        `INSERT OR REPLACE INTO body_notes
+         (id,ts,system,body_name,body_type,star_class,atmo_type,gravity,landable,bio_signals,geo_signals,terraform,distance_ls,value,notes,tags,coords)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [n.id, n.ts, n.system, n.body_name, n.body_type||'', n.star_class||'', n.atmo_type||'',
+         n.gravity||null, n.landable?1:0, n.bio_signals||0, n.geo_signals||0,
+         n.terraform||'', n.distance_ls||null, n.value||0, n.notes||'', tags, coords]
+    );
+    saveDB();
+    return true;
+});
+
+ipcMain.handle('bodynotes:delete', (_, id) => {
+    db.run('DELETE FROM body_notes WHERE id=?', [id]);
+    recordTombstone(id, 'body_note');
+    saveDB();
+    return true;
 });
