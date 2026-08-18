@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Paths this app's FileProvider is allowed to expose to other apps via a
+    content:// URI. Needed so @capacitor/share can attach files (e.g. the
+    CMDRSYS JSON export written to the app's cache dir) instead of silently
+    dropping the attachment and sharing text only.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="cmdrsys_cache" path="." />
+    <files-path name="cmdrsys_files" path="." />
+    <external-cache-path name="cmdrsys_external_cache" path="." />
+    <external-files-path name="cmdrsys_external_files" path="." />
+</paths>

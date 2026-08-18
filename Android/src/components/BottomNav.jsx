@@ -5,7 +5,6 @@ const NAV_ITEMS = [
   { id: 'logs',       icon: '◉', label: 'Log' },
   { id: 'bookmarks',  icon: '◎', label: 'Bookmarks' },
   { id: 'bodynotes',  icon: '⬡', label: 'Bodies' },
-  { id: 'visited',    icon: '◇', label: 'Visited' },
   { id: 'settings',   icon: '⚙', label: 'Settings' },
 ];
 

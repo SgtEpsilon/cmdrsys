@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld('api', {
     getBookmarks:   ()   => ipcRenderer.invoke('bookmarks:getAll'),
     saveBookmark:   (bm) => ipcRenderer.invoke('bookmarks:save', bm),
     deleteBookmark: (id) => ipcRenderer.invoke('bookmarks:delete', id),
-    reorderBookmarks: (ids) => ipcRenderer.invoke('bookmarks:reorder', ids),
 
     // Visited systems
     getVisited:   ()          => ipcRenderer.invoke('visited:getAll'),
@@ -40,6 +39,10 @@ contextBridge.exposeInMainWorld('api', {
     onJournalProgress: (cb) => ipcRenderer.on('journal:progress',   (_, p)   => cb(p)),
     onJournalEvents:   (cb) => ipcRenderer.on('journal:newEvents',  (_, evs) => cb(evs)),
     onMetaUpdate:      (cb) => ipcRenderer.on('journal:metaUpdate', (_, meta) => cb(meta)),
+    // Fired once a background journal load (auto-load on startup, or a
+    // manual pick via openJournal) finishes — the app is already usable
+    // the whole time this is loading, this just fills in the results.
+    onJournalAutoLoadComplete: (cb) => ipcRenderer.on('journal:autoLoadComplete', (_, r) => cb(r)),
 
     // Sync server
     getSyncInfo:  ()      => ipcRenderer.invoke('sync:getInfo'),
@@ -54,7 +57,6 @@ contextBridge.exposeInMainWorld('api', {
     getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
     saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
     deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
-    reorderBodyNotes: (ids) => ipcRenderer.invoke('bodynotes:reorder', ids),
     // Open URL in system browser
     openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 

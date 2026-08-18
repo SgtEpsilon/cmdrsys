@@ -6,7 +6,6 @@ import {
   getSettings, saveSettings,
   getBodyNotes, saveBodyNotes,
   getDeletedItems, saveDeletedItems,
-  getFolders, saveFolders,
 } from '../utils/storage.js';
 import { getSyncConfig, fullSync, deleteBookmarkOnDesktop, deleteLogOnDesktop, deleteBodyNoteOnDesktop } from '../utils/syncService.js';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -32,7 +31,6 @@ export function useStore() {
   const [settings,   setSettingsState]   = useState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL' });
   const [bodyNotes,  setBodyNotesState]  = useState([]);
   const [deletedItems, setDeletedItemsState] = useState([]);
-  const [folders,    setFoldersState]    = useState([]);
   const [ready,      setReady]           = useState(false);
 
   // Sync state
@@ -45,26 +43,24 @@ export function useStore() {
   const logsRef      = useRef([]);
   const bodyNotesRef = useRef([]);
   const deletedItemsRef = useRef([]);
-  const foldersRef   = useRef([]);
+  const visitedRef   = useRef([]);
   bookmarksRef.current = bookmarks;
   logsRef.current      = logs;
   bodyNotesRef.current = bodyNotes;
   deletedItemsRef.current = deletedItems;
-  foldersRef.current   = folders;
+  visitedRef.current   = visited;
 
   // Load all data on mount
   useEffect(() => {
     (async () => {
       try {
         const [l, b, v, s, bn, di] = await Promise.all([getLogs(), getBookmarks(), getVisited(), getSettings(), getBodyNotes(), getDeletedItems()]);
-        const fo = await getFolders();
         setLogsState(l);
         setBookmarksState((b || []).map(normaliseBm));
         setVisitedState(v);
         setSettingsState({ cmdr: 'UNKNOWN', ship: 'UNKNOWN VESSEL', system: 'SOL', ...s });
         setBodyNotesState(bn || []);
         setDeletedItemsState(di || []);
-        setFoldersState(fo || []);
       } catch (e) {
         console.error('useStore: load error', e);
       } finally {
@@ -86,7 +82,7 @@ export function useStore() {
       setSyncStatus('syncing');
       setSyncError('');
       try {
-        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, foldersRef.current);
+        const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, visitedRef.current);
 
         // Persist and update state
         await saveBookmarks(result.bookmarks);
@@ -98,16 +94,17 @@ export function useStore() {
         await saveBodyNotes(result.bodyNotes);
         setBodyNotesState(result.bodyNotes);
 
+        // Persist merged visited systems (journal-derived, kept in sync so no
+        // manual file copying is needed for this to reach Android)
+        if (result.visited) {
+          await saveVisited(result.visited);
+          setVisitedState(result.visited);
+        }
+
         // Persist merged tombstone list (keeps deletions durable across restarts)
         if (result.deletedItems) {
           await saveDeletedItems(result.deletedItems);
           setDeletedItemsState(result.deletedItems);
-        }
-
-        // Sync folders
-        if (result.folders) {
-          await saveFolders(result.folders);
-          setFoldersState(result.folders);
         }
 
         // Optionally pull CMDR/ship/system from desktop if still unknown
@@ -146,7 +143,7 @@ export function useStore() {
     setSyncStatus('syncing');
     setSyncError('');
     try {
-      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, foldersRef.current);
+      const result = await fullSync(bookmarksRef.current, logsRef.current, bodyNotesRef.current, deletedItemsRef.current, visitedRef.current);
 
       await saveBookmarks(result.bookmarks);
       setBookmarksState(result.bookmarks.map(normaliseBm));
@@ -157,15 +154,14 @@ export function useStore() {
       await saveBodyNotes(result.bodyNotes);
       setBodyNotesState(result.bodyNotes);
 
+      if (result.visited) {
+        await saveVisited(result.visited);
+        setVisitedState(result.visited);
+      }
+
       if (result.deletedItems) {
         await saveDeletedItems(result.deletedItems);
         setDeletedItemsState(result.deletedItems);
-      }
-
-      // Sync folders
-      if (result.folders) {
-        await saveFolders(result.folders);
-        setFoldersState(result.folders);
       }
 
       const ds = result.settingsFromDesktop;
@@ -182,7 +178,7 @@ export function useStore() {
 
       setSyncStatus('ok');
       setLastSyncTime(Date.now());
-      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length, bodyNotes: result.bodyNotes.length };
+      return { ok: true, bookmarks: result.bookmarks.length, logs: result.logs.length, bodyNotes: result.bodyNotes.length, visited: result.visited.length };
     } catch (e) {
       setSyncStatus('error');
       setSyncError(e.message);
@@ -277,27 +273,6 @@ export function useStore() {
     deleteBodyNoteOnDesktop(id);
   }, []);
 
-  // ── Folders ──────────────────────────────────────────────────────────────────
-  const upsertFolder = useCallback(async (folder) => {
-    const stamped = { ...folder, ts: Date.now() };
-    setFoldersState(prev => {
-      const idx = prev.findIndex(f => f.id === stamped.id);
-      const next = idx >= 0
-        ? prev.map(f => f.id === stamped.id ? stamped : f)
-        : [...prev, stamped];
-      saveFolders(next);
-      return next;
-    });
-  }, []);
-
-  const deleteFolder = useCallback(async (id) => {
-    setFoldersState(prev => {
-      const next = prev.filter(f => f.id !== id);
-      saveFolders(next);
-      return next;
-    });
-  }, []);
-
   // ── Visited ──────────────────────────────────────────────────────────────────
   const clearVisited = useCallback(async () => {
     setVisitedState([]);
@@ -315,7 +290,9 @@ export function useStore() {
 
   // ── Import / Export ──────────────────────────────────────────────────────────
   const exportData = useCallback(async () => {
-    const payload = JSON.stringify({ logs, bookmarks, visited, settings }, null, 2);
+    // Include everything a restore needs — body notes and deletion tombstones
+    // were previously left out, so a "backup" silently lost them.
+    const payload = JSON.stringify({ logs, bookmarks, visited, settings, bodyNotes, deletedItems }, null, 2);
     const fileName = `cmdrsys-backup-${Date.now()}.json`;
     try {
       // Write to the app's cache directory (always writable, no permissions needed)
@@ -337,15 +314,17 @@ export function useStore() {
       console.error('Export failed:', e);
       throw new Error('Export failed: ' + e.message);
     }
-  }, [logs, bookmarks, visited, settings]);
+  }, [logs, bookmarks, visited, settings, bodyNotes, deletedItems]);
 
   const importData = useCallback(async (jsonText) => {
     try {
       const data = JSON.parse(jsonText);
-      if (data.logs)      { await saveLogs(data.logs);           setLogsState(data.logs); }
-      if (data.bookmarks) { await saveBookmarks(data.bookmarks); setBookmarksState(data.bookmarks); }
-      if (data.visited)   { await saveVisited(data.visited);     setVisitedState(data.visited); }
-      if (data.settings)  { await saveSettings(data.settings);   setSettingsState(s => ({ ...s, ...data.settings })); }
+      if (data.logs)        { await saveLogs(data.logs);               setLogsState(data.logs); }
+      if (data.bookmarks)   { await saveBookmarks(data.bookmarks);     setBookmarksState(data.bookmarks); }
+      if (data.visited)     { await saveVisited(data.visited);         setVisitedState(data.visited); }
+      if (data.settings)    { await saveSettings(data.settings);       setSettingsState(s => ({ ...s, ...data.settings })); }
+      if (data.bodyNotes)   { await saveBodyNotes(data.bodyNotes);     setBodyNotesState(data.bodyNotes); }
+      if (data.deletedItems){ await saveDeletedItems(data.deletedItems); setDeletedItemsState(data.deletedItems); }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };
@@ -362,7 +341,5 @@ export function useStore() {
     exportData, importData,
     // Sync
     syncStatus, syncError, lastSyncTime, triggerSync,
-    // Folders
-    folders, upsertFolder, deleteFolder,
   };
 }

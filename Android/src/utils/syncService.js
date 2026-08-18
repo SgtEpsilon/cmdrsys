@@ -121,7 +121,7 @@ export async function pullFromDesktop() {
   return data;
 }
 
-export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems, folders) {
+export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems, visited) {
   const { url, token } = await getSyncConfig();
   if (!url) throw new Error('No sync URL configured');
   const res = await fetchWithRetry(`${url}/sync`, {
@@ -132,7 +132,7 @@ export async function pushToDesktop(bookmarks, logs, bodyNotes, deletedItems, fo
       logs,
       body_notes:    bodyNotes || [],
       deleted_items: deletedItems || [],
-      folders:       folders || [],
+      visited:       visited || [],
     }),
   });
   if (res.status === 401) throw new Error('Sync token mismatch — check token in Settings');
@@ -170,7 +170,7 @@ export async function deleteBodyNoteOnDesktop(id) {
   } catch (_) { /* non-fatal */ }
 }
 
-export async function fullSync(localBookmarks, localLogs, localBodyNotes, localDeletedItems, localFolders) {
+export async function fullSync(localBookmarks, localLogs, localBodyNotes, localDeletedItems, localVisited) {
   const remote = await pullFromDesktop();
 
   // Build a set of all tombstoned IDs (local + remote) for each type
@@ -206,22 +206,25 @@ export async function fullSync(localBookmarks, localLogs, localBodyNotes, localD
   for (const id of deletedSet.body_note) bnMap.delete(id);
   const mergedBodyNotes = [...bnMap.values()].sort((a, b) => b.ts - a.ts);
 
-  // Merge folders — last-write wins per id (folders have no tombstones for now)
-  const folderMap = new Map((localFolders || []).map(f => [f.id, f]));
-  for (const rf of (remote.folders || [])) {
-    const local = folderMap.get(rf.id);
-    if (!local || (local.ts ?? 0) < (rf.ts ?? 0)) folderMap.set(rf.id, rf);
+  // Visited systems — EARLIEST ts wins per name (ts is first-visit time, the
+  // opposite of the "latest wins" rule above). No tombstones for these; the
+  // desktop's journal reading is the ongoing source of truth, this just also
+  // picks up anything Android learned via its manual journal-file import.
+  const visMap = new Map((localVisited || []).map(v => [v.name, v]));
+  for (const rv of (remote.visited || [])) {
+    const local = visMap.get(rv.name);
+    if (!local || rv.ts < local.ts) visMap.set(rv.name, rv);
   }
-  const mergedFolders = [...folderMap.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const mergedVisited = [...visMap.values()].sort((a, b) => b.ts - a.ts);
 
   // Push merged data + all tombstones so Electron stays in sync
-  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes, allDeleted, mergedFolders);
+  await pushToDesktop(mergedBookmarks, mergedLogs, mergedBodyNotes, allDeleted, mergedVisited);
 
   return {
     bookmarks:           mergedBookmarks,
     logs:                mergedLogs,
     bodyNotes:           mergedBodyNotes,
-    folders:             mergedFolders,
+    visited:             mergedVisited,
     settingsFromDesktop: remote.settings || {},
     schemaVersion:       remote.schema_version ?? 1,
     // Return merged tombstone list so the caller can persist it locally

@@ -9,7 +9,6 @@ import Dashboard       from './components/Dashboard.jsx';
 import LogsView        from './components/LogsView.jsx';
 import BookmarksView   from './components/BookmarksView.jsx';
 import BodyNotesView   from './components/BodyNotesView.jsx';
-import VisitedView     from './components/VisitedView.jsx';
 import SettingsView    from './components/SettingsView.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 
@@ -18,7 +17,6 @@ export default function App() {
   const { message, visible, toast } = useToast();
   const [view,  setView]  = useState('dashboard');
   const [clock, setClock] = useState(edNow());
-  const [pendingBookmark, setPendingBookmark] = useState(null);
 
   // Clock
   useEffect(() => {
@@ -49,11 +47,6 @@ export default function App() {
     window.location.reload();
   }, [store]);
 
-  // Visited view → open bookmark modal on bookmarks tab
-  function handleBookmarkFromVisited(sysName) {
-    setPendingBookmark(sysName);
-    setView('bookmarks');
-  }
 
   if (!store.ready) {
     return (
@@ -147,9 +140,6 @@ export default function App() {
             upsertBookmark={async (b) => { await store.upsertBookmark(b); toast('◎ Bookmark saved'); }}
             deleteBookmark={async (id) => { await store.deleteBookmark(id); toast('Bookmark deleted'); }}
             currentSystem={store.settings.system}
-            initialPrefill={pendingBookmark}
-            onPrefillConsumed={() => setPendingBookmark(null)}
-            folders={store.folders}
           />
         )}
         {view === 'bodynotes' && (
@@ -158,14 +148,6 @@ export default function App() {
             upsertBodyNote={async (n) => { await store.upsertBodyNote(n); toast('⬡ Body note saved'); }}
             deleteBodyNote={async (id) => { await store.deleteBodyNote(id); toast('Body note deleted'); }}
             currentSystem={store.settings.system}
-            folders={store.folders}
-          />
-        )}
-        {view === 'visited' && (
-          <VisitedView
-            visited={store.visited}
-            clearVisited={async () => { await store.clearVisited(); toast('Visited systems cleared'); }}
-            onBookmark={handleBookmarkFromVisited}
           />
         )}
         {view === 'settings' && (
@@ -182,9 +164,6 @@ export default function App() {
             syncError={store.syncError}
             lastSyncTime={store.lastSyncTime}
             triggerSync={store.triggerSync}
-            folders={store.folders}
-            upsertFolder={store.upsertFolder}
-            deleteFolder={store.deleteFolder}
           />
         )}
       </main>
