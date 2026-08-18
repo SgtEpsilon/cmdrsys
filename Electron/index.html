@@ -920,7 +920,7 @@
 
 <!-- ── STATUS BAR ──────────────────────────────────────────────────────────── -->
 <div id="statusbar">
-    <div class="sb-item">CMDRSYS <span id="sb-version">v1.0</span></div>
+    <div class="sb-item">CMDRSYS <span>v1.0</span></div>
     <div class="sb-item">|</div>
     <div class="sb-item">DB: <span class="ok">SQLITE</span></div>
     <div class="sb-item">|</div>
@@ -1359,6 +1359,11 @@ let gLogs=[], gBm=[], gVisited=[], gJEvents=[];
 // LOADING OVERLAY
 // ══════════════════════════════════════════════════════════════════
 window.api.onJournalProgress(({ file, done, total }) => {
+    // The loading overlay (and ld-bar/ld-file/ld-count inside it) gets
+    // removed from the DOM by hideLoadingOverlay() shortly after startup —
+    // well before background journal loading finishes. Progress events keep
+    // arriving after that, so these elements may legitimately be gone by
+    // the time this fires; just no-op instead of throwing.
     const bar = document.getElementById('ld-bar');
     if (!bar) return;
     const pct = Math.round((done / total) * 100);
@@ -1381,17 +1386,20 @@ function hideLoadingOverlay() {
 // while journal data streams in and is filled in once ready.
 // ══════════════════════════════════════════════════════════════════
 async function initApp() {
+    // Version shown in the toolbar and System Status panel comes straight
+    // from package.json (via Electron's app.getVersion()) — never hardcode
+    // it here, or it'll drift the next time the version is bumped.
     try {
         if (!window.api || typeof window.api.getAppVersion !== 'function') {
-            throw new Error('window.api.getAppVersion is not available');
+            throw new Error('window.api.getAppVersion is not available — preload.js may be out of date or not loaded');
         }
         const version = await window.api.getAppVersion();
         document.getElementById('tb-version').textContent      = 'v' + version;
         document.getElementById('sysstat-version').textContent = 'v' + version;
-        document.getElementById('sb-version').textContent      = 'v' + version;
     } catch (e) {
         console.error('[version] failed to load app version:', e);
     }
+
     // Signal main process we're ready. Returns immediately — journal loading
     // (if any) continues in the background and reports back via
     // 'journal:progress' / 'journal:autoLoadComplete'.

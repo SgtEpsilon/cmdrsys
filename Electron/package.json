@@ -1,6 +1,6 @@
 {
   "name": "cmdrsys",
-  "version": "2.2.0",
+  "version": "2.3.1",
   "description": "Elite Dangerous CMDR Navigation Interface",
   "main": "main.js",
   "scripts": {
@@ -16,8 +16,12 @@
     "files": [
       "main.js",
       "preload.js",
+      "journalWorker.js",
       "renderer/**/*",
       "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "journalWorker.js"
     ],
     "win": {
       "target": "nsis"

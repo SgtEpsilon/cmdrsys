@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('api', {
     // Open URL in system browser
     openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 
+    // App info
+    getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+
     // Export / Import
     exportJSON: () => ipcRenderer.invoke('export:json'),
     importJSON: () => ipcRenderer.invoke('import:json'),
