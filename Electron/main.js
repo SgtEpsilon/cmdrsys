@@ -184,10 +184,40 @@ function parseLine(line) {
     try { return JSON.parse(line.trim()); } catch { return null; }
 }
 
+// 'Saved Games' is a Windows "known folder" (FOLDERID_SavedGames). Most
+// installs keep it at %USERPROFILE%\Saved Games, but a user can relocate it
+// (Properties > Location, same as Documents/Downloads), and OneDrive "PC
+// folder backup" can move it too. When that happens the hardcoded path is
+// wrong even though it "looks right". Resolve the real location from the
+// registry first, and only fall back to the hardcoded guess if that fails.
+function getWindowsSavedGamesDir() {
+    const { execFileSync } = require('child_process');
+    const GUID = '{4C5C32FF-BB9D-43b0-B5B4-2D72E54EAAA4}'; // FOLDERID_SavedGames
+    try {
+        const out = execFileSync('reg', [
+            'query',
+            'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders',
+            '/v', GUID,
+        ], { encoding: 'utf8' });
+        // Example line: "    {4C5C32FF-...}    REG_EXPAND_SZ    %USERPROFILE%\Saved Games"
+        const match = out.match(/REG_(?:EXPAND_)?SZ\s+(.+)\r?$/m);
+        if (match) {
+            const expanded = match[1].trim().replace(/%([^%]+)%/g, (_, name) => process.env[name] || '');
+            if (expanded && fs.existsSync(expanded)) return expanded;
+        }
+    } catch (e) {
+        console.warn('Could not read Saved Games location from registry, falling back:', e.message);
+    }
+    return null;
+}
+
 function getDefaultJournalDir() {
     if (process.platform === 'win32') {
-        const base = process.env.USERPROFILE || os.homedir();
-        return path.join(base, 'Saved Games', 'Frontier Developments', 'Elite Dangerous');
+        const savedGames = getWindowsSavedGamesDir()
+            || path.join(process.env.USERPROFILE || os.homedir(), 'Saved Games');
+        const dir = path.join(savedGames, 'Frontier Developments', 'Elite Dangerous');
+        console.log('[journal] resolved default journal directory:', dir, fs.existsSync(dir) ? '(exists)' : '(does not exist)');
+        return dir;
     }
     // Wine/Proton on Linux
     const proton = path.join(os.homedir(), '.steam', 'steam', 'steamapps', 'compatdata',
@@ -227,7 +257,18 @@ function startJournalLoad(journalDir) {
     }
 
     return new Promise((resolve, reject) => {
-        const worker = new Worker(path.join(__dirname, 'journalWorker.js'), {
+        // In a packaged build, __dirname points inside app.asar. worker_threads
+        // can't load a script from inside that virtual archive, so this file is
+        // marked "asarUnpack" in package.json and actually lives alongside
+        // app.asar.unpacked instead. Rewriting the path here covers both the
+        // packaged case and plain `electron .` dev runs (where __dirname never
+        // contains "app.asar" and the .replace is a no-op).
+        const workerPath = path.join(__dirname, 'journalWorker.js').replace('app.asar', 'app.asar.unpacked');
+        if (!fs.existsSync(workerPath)) {
+            reject(new Error(`journalWorker.js not found at ${workerPath} — check the "files"/"asarUnpack" entries in package.json`));
+            return;
+        }
+        const worker = new Worker(workerPath, {
             workerData: { journalDir },
         });
         journalLoadWorker = worker;
@@ -680,6 +721,13 @@ ipcMain.on('window:minimize', () => win.minimize());
 ipcMain.on('window:maximize', () => win.isMaximized() ? win.unmaximize() : win.maximize());
 ipcMain.on('window:close',    () => win.close());
 ipcMain.handle('shell:openExternal', (_, url) => shell.openExternal(url));
+
+// ─── App info ─────────────────────────────────────────────────────────────────
+// app.getVersion() returns the "version" field from package.json (the one
+// electron-builder also stamps into the packaged build), so this can never
+// drift from what's actually shipped — no separate version string to keep
+// in sync by hand.
+ipcMain.handle('app:getVersion', () => app.getVersion());
 
 // ─── renderer:ready — triggered by renderer on mount ─────────────────────────
 // Returns immediately — journal loading runs in the background (see
