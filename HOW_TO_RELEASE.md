@@ -40,6 +40,11 @@ Troubleshooting below.
 
 ## Every time you want to release an Android update
 
+You can do this either **entirely from the command line** (Steps below) or
+**using Android Studio's GUI** if you'd rather click buttons than type
+commands — see "Using Android Studio instead" further down. Either way, do
+Step 1 and Step 2 first.
+
 ### Step 1 — Make your code changes
 Edit whatever files you're changing as normal.
 
@@ -90,6 +95,70 @@ new app") — that's how you know it worked. Tap through, done.
 Your existing data (bookmarks, logs, settings) stays exactly as it was —
 updating never wipes anything.
 
+---
+
+## Using Android Studio instead (build, test, and sign with clicks, not commands)
+
+This does the exact same thing as Steps 3–4 above, but through the Android
+Studio interface. Do this **after** you've done Step 1 (code changes) and
+Step 2 (bump `versionCode`/`versionName`) above — those two don't change.
+
+### A) Sync your web changes into the Android project
+Every time you change anything outside the `android/` subfolder (i.e. the
+React/JS app, not native Android files), you need to rebuild the web bundle
+first, or Android Studio will just be testing/signing your *old* code. Open
+PowerShell in `Android/` and run:
+```
+npm run build
+npx cap sync android
+```
+Then open (or switch to) Android Studio.
+
+### B) Test it first — run on your phone or an emulator
+Before making a release build, it's worth actually running the app to check
+your changes work:
+1. Plug your phone in via USB with **USB debugging** enabled (Settings →
+   Developer Options → USB debugging — if you don't see Developer Options,
+   tap "Build number" in About Phone 7 times to unlock it), or start an
+   emulator from Android Studio's **Device Manager** (top-right toolbar icon
+   that looks like a phone).
+2. Pick your phone/emulator from the device dropdown in the toolbar (next to
+   the green ▶ Run button).
+3. Click the green ▶ **Run** button. Android Studio builds a debug version
+   and installs it straight onto the selected device.
+4. Poke around, confirm it works the way you expect.
+
+This debug build is just for testing — it's not the signed release version,
+and installing it won't interfere with your signed version already on the
+phone (they're allowed to coexist since debug builds use a `.debug` package
+suffix — see `applicationIdSuffix ".debug"` in `build.gradle`).
+
+### C) Build and sign the release APK
+Once you're happy it works:
+1. Menu bar → **Build → Generate Signed Bundle / APK…**
+2. Choose **APK** (not "Android App Bundle"), click **Next**.
+3. Android Studio should offer to remember your keystore from before. If it
+   asks you to browse for one, point it at
+   `Android/android/cmdrsys-release.keystore` and enter the store password,
+   key alias (`cmdrsys`), and key password from your
+   `keystore.properties` file.
+   **Do not click "Create new..." here** — that would generate a brand-new
+   keystore, and your next release would then fail to update over this one
+   (see Troubleshooting: "installs as a second, separate app"). Always
+   reuse the same existing keystore file.
+4. Click **Next**. Choose the **release** build variant, and check **V1
+   and V2** signature versions if asked (both ticked is the safe default).
+5. Click **Create/Finish**. Android Studio will show a notification bottom-right
+   when it's done, with a **"locate"** link — click that to jump straight to
+   the folder containing your signed APK.
+
+The signed APK ends up in the same place as the command-line method:
+`Android/android/app/build/outputs/apk/release/app-release.apk` — so Step 5
+and Step 6 above (getting it onto your phone and installing) are identical
+either way.
+
+---
+
 ## Android Troubleshooting
 
 **"App not installed" or it installs as a second, separate app instead of updating**
@@ -113,14 +182,36 @@ it in exactly, forward slashes).
 → Copy the full error text and send it over — paste the whole thing, not just
 the last line.
 
+**Android Studio's "Generate Signed Bundle/APK" dialog won't accept your keystore, or says the password is wrong**
+→ Double-check you're typing the passwords exactly as they appear in
+`Android/android/keystore.properties` — copy-paste them rather than typing,
+since these are case-sensitive.
+
+**You accidentally clicked "Create new..." in the signing dialog and made a new keystore**
+→ Delete the new keystore file it created and redo Part C, this time browsing
+to your existing `cmdrsys-release.keystore` instead. If you already built and
+installed an APK signed with the new one, see "installs as a second, separate
+app" above.
+
 ## Android quick reference
 
+**Command line:**
 ```
 # 1. Bump versionCode (+1) and versionName in Android/android/app/build.gradle
 npm run build
 npx cap sync android
 cd android && ./gradlew assembleRelease
 # 2. Grab android/app/build/outputs/apk/release/app-release.apk, send to phone, tap to install
+```
+
+**Android Studio:**
+```
+# 1. Bump versionCode (+1) and versionName in Android/android/app/build.gradle
+npm run build
+npx cap sync android
+# 2. Open Android Studio → ▶ Run on phone/emulator to test
+# 3. Build → Generate Signed Bundle/APK… → APK → pick existing cmdrsys-release.keystore → release variant
+# 4. Click "locate" on the finish notification, send that APK to phone, tap to install
 ```
 
 ---
