@@ -5,6 +5,22 @@ const SYNC_TOKEN_KEY = 'syncToken';
 const FETCH_TIMEOUT  = 12_000;
 const MAX_RETRIES    = 2;
 
+// Normalise a user-typed sync URL into an absolute http(s) URL with no
+// trailing slash. Without this, a value like "192.168.1.5:45678" (missing
+// the scheme) is treated by fetch() as a *relative* path — inside the
+// Android WebView that resolves against the app's own local server, which
+// falls back to serving index.html for unknown routes. The app then tries
+// to JSON-parse that HTML and fails with "Unexpected token < ... <!doctype".
+// Normalising at save time means every caller (auto-sync, manual sync,
+// ping) automatically gets a safe, absolute URL.
+export function normaliseSyncUrl(raw) {
+  let url = (raw || '').trim();
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) url = `http://${url}`;
+  url = url.replace(/\/+$/, ''); // strip trailing slash(es)
+  return url;
+}
+
 export async function getSyncConfig() {
   const url   = (await storage.get(SYNC_URL_KEY))  ?? '';
   const token = (await storage.get(SYNC_TOKEN_KEY)) ?? '';
@@ -12,7 +28,7 @@ export async function getSyncConfig() {
 }
 
 export async function setSyncConfig({ url, token }) {
-  if (url   !== undefined) await storage.set(SYNC_URL_KEY,   url.trim());
+  if (url   !== undefined) await storage.set(SYNC_URL_KEY,   normaliseSyncUrl(url));
   if (token !== undefined) await storage.set(SYNC_TOKEN_KEY, token.trim());
 }
 
@@ -23,6 +39,12 @@ function authHeaders(token) {
 }
 
 async function fetchWithTimeout(url, options = {}) {
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(
+      `Invalid sync URL "${url}" — it must start with http:// or https:// ` +
+      `(e.g. http://192.168.1.x:45678). Re-enter it in Settings.`
+    );
+  }
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {

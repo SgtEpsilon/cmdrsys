@@ -1,5 +1,17 @@
 apply plugin: 'com.android.application'
 
+// Release signing — reads from keystore.properties (kept OUT of git; see
+// keystore.properties.example). Keep using the SAME keystore file and
+// passwords for every release build, forever — that's what lets an APK
+// install as an UPDATE instead of a separate app. If this file is missing,
+// the release build falls back to being unsigned (won't install on a
+// device) rather than silently using a throwaway key.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace "com.cmdrsys.app"
     compileSdk 34
@@ -8,15 +20,32 @@ android {
         applicationId "com.cmdrsys.app"
         minSdk 23
         targetSdk 34
-        versionCode 1
-        versionName "2.0.0"
+        // Bump versionCode by 1 on EVERY release build you intend to
+        // install over a previous one — Android refuses to "downgrade"
+        // to an equal-or-lower versionCode over an existing install.
+        versionCode 2
+        versionName "2.3.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile     rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias      keystoreProps['keyAlias']
+                keyPassword   keystoreProps['keyPassword']
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             applicationIdSuffix ".debug"
