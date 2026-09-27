@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
     // Journal
     openJournal:    ()  => ipcRenderer.invoke('journal:open'),
     getJournalEvents: () => ipcRenderer.invoke('journal:getEvents'),
+    getJournalMeta:   () => ipcRenderer.invoke('journal:getMeta'),
     clearJournalEvents: () => ipcRenderer.invoke('journal:clearEvents'),
     stopJournalWatch:  () => ipcRenderer.invoke('journal:stopWatch'),
 

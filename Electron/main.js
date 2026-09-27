@@ -239,9 +239,32 @@ let journalPath       = null;
 let lastFileSize      = 0;
 let journalLoadWorker = null;   // the in-flight background load, if any
 
-// In-memory journal events — NOT stored in SQLite (avoids huge DB writes)
-// We re-parse from files on each startup; only visited/meta is persisted.
-let memEvents = [];
+// In-memory journal feed state — NOT stored in SQLite (avoids huge DB
+// writes). We re-parse from files on each startup; only visited/meta is
+// persisted.
+//
+// We deliberately do NOT keep the full raw event history in memory here.
+// A long-running commander's journal can be hundreds of thousands of
+// events, and shipping that whole array across a worker postMessage and
+// then again across the journal:getEvents IPC call — both of which use
+// the structured clone algorithm and block whichever thread is doing the
+// (de)serializing — used to stall the app for a long time right after
+// startup, which looked like a hang. So journalWorker.js reduces the raw
+// history down to just what the UI actually needs, and that's all we
+// hold onto: a capped, pre-filtered feed, a total count, and the two
+// specific "latest event of this type" lookups the Route Planner needs.
+let memFeedEvents    = [];   // interesting events only, newest-first, capped
+let memEventCount    = 0;    // true total across all journal files
+let memLatestLoadout = null; // most recent Loadout event with MaxJumpRange
+let memLatestFSDJump = null; // most recent FSDJump event with JumpDist
+
+// Same "interesting" set journalWorker.js uses, needed here too so live
+// journal-watcher chunks (which arrive raw, a few lines at a time) can be
+// folded into memFeedEvents the same way the bulk load's results are.
+const JFEED_INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
+    'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
+    'Resurrection','SupercruiseExit','LoadGame']);
+const JFEED_CAP = 10000;
 
 // Starts a background load of every journal file in `journalDir`. Resolves
 // once parsing is done AND the resulting visited/settings rows have been
@@ -305,7 +328,10 @@ function startJournalLoad(journalDir) {
                 if (msg.system) setSetting('system', msg.system);
                 flushDB();
 
-                memEvents = msg.events;
+                memFeedEvents    = msg.feedEvents;
+                memEventCount    = msg.eventCount;
+                memLatestLoadout = msg.latestLoadout;
+                memLatestFSDJump = msg.latestFSDJump;
                 startWatcher(msg.latestFile);
 
                 journalLoadWorker = null;
@@ -314,7 +340,7 @@ function startJournalLoad(journalDir) {
                     ok:         true,
                     fileCount:  msg.fileCount,
                     latestFile: path.basename(msg.latestFile),
-                    count:      memEvents.length,
+                    count:      memEventCount,
                     cmdr:       msg.cmdr,
                     ship:       msg.ship,
                     system:     msg.system,
@@ -353,7 +379,21 @@ function processLiveChunk(text) {
     const events = text.split('\n').map(parseLine).filter(Boolean);
     if (!events.length) return;
 
-    memEvents.push(...events);
+    // Live chunks are always small (just the lines appended since the last
+    // watch tick), so unlike the bulk startup load there's no perf concern
+    // scanning them fully — fold them into the same capped feed state.
+    memEventCount += events.length;
+    const interesting = events.filter(ev => JFEED_INTERESTING.has(ev.event));
+    if (interesting.length) {
+        memFeedEvents = interesting.slice().reverse().concat(memFeedEvents);
+        if (memFeedEvents.length > JFEED_CAP) memFeedEvents.length = JFEED_CAP;
+    }
+    // Chunk is chronological ascending, so the LAST matching entry (if any)
+    // is the newest.
+    const newLoadout = [...events].reverse().find(ev => ev.event === 'Loadout' && ev.MaxJumpRange);
+    if (newLoadout) memLatestLoadout = newLoadout;
+    const newFSD = [...events].reverse().find(ev => ev.event === 'FSDJump' && ev.JumpDist);
+    if (newFSD) memLatestFSDJump = newFSD;
 
     const visitStmt = db.prepare('INSERT OR IGNORE INTO visited (name, ts) VALUES (?, ?)');
     let system = '';
@@ -809,8 +849,19 @@ ipcMain.handle('visited:clear', () => {
 });
 
 // ─── Journal Events IPC ───────────────────────────────────────────────────────
-ipcMain.handle('journal:getEvents', () => memEvents);
-ipcMain.handle('journal:clearEvents', () => { memEvents = []; return true; });
+// Returns the capped, pre-filtered feed (newest-first) — not the raw
+// journal history. See the memFeedEvents comment above for why.
+ipcMain.handle('journal:getEvents', () => memFeedEvents);
+ipcMain.handle('journal:getMeta', () => ({
+    eventCount:    memEventCount,
+    latestLoadout: memLatestLoadout,
+    latestFSDJump: memLatestFSDJump,
+}));
+ipcMain.handle('journal:clearEvents', () => {
+    memFeedEvents = []; memEventCount = 0;
+    memLatestLoadout = null; memLatestFSDJump = null;
+    return true;
+});
 
 // ─── journal:open — user manually picks a journal file/folder ─────────────────
 // Same background-loading approach as renderer:ready: return as soon as the

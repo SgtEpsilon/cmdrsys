@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://spansh.co.uk;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://spansh.co.uk;">
     <title>CMDRSYS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="vendor/three.min.js"></script>
     <style>
         :root {
             --bg-void:  #020609;
@@ -569,7 +569,9 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
-            <input type="text" class="search-in" id="bm-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderBookmarks()">
+            <select class="search-in form-sel" id="bm-tag-filter" style="max-width:220px" onchange="renderBookmarks()">
+                <option value="">ALL TAGS</option>
+            </select>
         </div>
         <div id="bm-grid" class="bm-grid"></div>
     </div>
@@ -645,6 +647,9 @@
                 <option value="">ALL</option>
                 <option value="1">LANDABLE ONLY</option>
                 <option value="0">NON-LANDABLE</option>
+            </select>
+            <select class="search-in form-sel" id="bn-tag-filter" style="max-width:220px" onchange="renderBn()">
+                <option value="">ALL TAGS</option>
             </select>
         </div>
         <div id="bn-grid" class="bn-grid"></div>
@@ -1232,6 +1237,20 @@
 
 <script>
 // ══════════════════════════════════════════════════════════════════
+// SAFETY NET — if anything throws before initApp() finishes wiring up
+// the UI, make sure the startup overlay still gets dismissed instead of
+// leaving the whole window looking permanently frozen/unclickable.
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('error', (e) => {
+    console.error('[uncaught]', e.message, e.error);
+    const el = document.getElementById('loading-overlay');
+    if (el && !el.classList.contains('hide')) {
+        el.classList.add('hide');
+        setTimeout(() => el.remove(), 500);
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════
 // ED DATE SYSTEM
 // ══════════════════════════════════════════════════════════════════
 const ED_OFFSET = 1286;
@@ -1271,7 +1290,17 @@ function toast(msg) {
 
 // ══════════════════════════════════════════════════════════════════
 // THREE.JS HOLOGRAPHIC PLANET
+// Purely decorative — if THREE failed to load (no bundled file, blocked
+// network, no WebGL support, etc.) this must NOT be allowed to throw and
+// kill the rest of this script block. Everything below this IIFE (initApp,
+// modal open/close, all the onclick handlers referenced from the HTML)
+// depends on the script finishing execution, so a single uncaught error
+// here used to leave the whole app inert: loading overlay stuck up top,
+// every button and text field unresponsive because their handlers were
+// never even defined.
 // ══════════════════════════════════════════════════════════════════
+try {
+if (typeof THREE === 'undefined') throw new Error('THREE is not loaded');
 (function() {
     const canvas   = document.getElementById('hologram-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
@@ -1321,6 +1350,9 @@ function toast(msg) {
         renderer.render(scene,camera);
     })();
 })();
+} catch (e) {
+    console.warn('[hologram] disabled — THREE.js unavailable or WebGL init failed:', e.message);
+}
 
 // ══════════════════════════════════════════════════════════════════
 // PERFORMANCE HELPERS
@@ -1354,6 +1386,13 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // INIT — load from SQLite via IPC
 // ══════════════════════════════════════════════════════════════════
 let gLogs=[], gBm=[], gVisited=[], gJEvents=[];
+// gJEvents holds only the capped, pre-filtered "interesting" journal feed
+// (newest-first) — never the full raw journal history, which for a long
+// career can be hundreds of thousands of events and is too expensive to
+// pass across IPC / re-render on every keystroke. Total count and the two
+// specific "latest event" lookups the Route Planner needs are tracked
+// separately since they don't require the raw history either.
+let gEventCount = 0, gLatestLoadout = null, gLatestFSDJump = null;
 
 // ══════════════════════════════════════════════════════════════════
 // LOADING OVERLAY
@@ -1408,6 +1447,10 @@ async function initApp() {
     gBm      = await window.api.getBookmarks();
     gVisited = await window.api.getVisited();
     gJEvents = await window.api.getJournalEvents();
+    const meta0 = await window.api.getJournalMeta();
+    gEventCount    = meta0.eventCount;
+    gLatestLoadout = meta0.latestLoadout;
+    gLatestFSDJump = meta0.latestFSDJump;
 
     if (autoLoad && autoLoad.pending) {
         // Journals are loading in the background — reflect that in the UI
@@ -1448,6 +1491,10 @@ window.api.onJournalAutoLoadComplete(async (result) => {
 
     gJEvents = await window.api.getJournalEvents();
     gVisited = await window.api.getVisited();
+    const meta = await window.api.getJournalMeta();
+    gEventCount    = meta.eventCount;
+    gLatestLoadout = meta.latestLoadout;
+    gLatestFSDJump = meta.latestFSDJump;
 
     const settings = await window.api.getAllSettings();
     document.getElementById('inp-cmdr').value      = settings.cmdr   || 'UNKNOWN';
@@ -1493,7 +1540,7 @@ function updateDash() {
     document.getElementById('stat-logs').textContent = gLogs.length;
     document.getElementById('stat-bm').textContent   = gBm.length;
     document.getElementById('stat-vis').textContent  = gVisited.length;
-    document.getElementById('sb-ev').textContent     = gJEvents.length;
+    document.getElementById('sb-ev').textContent     = gEventCount;
 
     const rl = document.getElementById('dash-logs');
     const recent = [...gLogs].sort((a,b)=>b.ts-a.ts).slice(0,6);
@@ -1666,16 +1713,33 @@ async function deleteBm(id) {
     toast('Bookmark deleted');
 }
 
+// Rebuilds the "FILTER BY TAG" dropdown from whatever tags are actually
+// assigned to bookmarks right now, so it never drifts out of date as tags
+// get added/removed/edited. Preserves the current selection if it's still
+// a valid tag.
+function populateBmTagOptions() {
+    const sel = document.getElementById('bm-tag-filter');
+    if (!sel) return;
+    const current = sel.value;
+    const tags = new Set();
+    gBm.forEach(b => (b.tags||[]).forEach(t => t && tags.add(t)));
+    const sorted = [...tags].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML = '<option value="">ALL TAGS</option>' +
+        sorted.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+    if (sorted.includes(current)) sel.value = current;
+}
+
 function renderBookmarks() {
+    populateBmTagOptions();
     const q   = (document.getElementById('bm-search')?.value||'').toLowerCase();
-    const tag = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
+    const tag = document.getElementById('bm-tag-filter')?.value||'';
     const fl  = gBm.filter(b => {
         const textMatch = !q || (
             b.system.toLowerCase().includes(q) ||
             (b.notes||'').toLowerCase().includes(q) ||
             (b.tags||[]).some(t=>t.toLowerCase().includes(q))
         );
-        const tagMatch  = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        const tagMatch  = !tag || (b.tags||[]).includes(tag);
         return textMatch && tagMatch;
     });
     const c  = document.getElementById('bm-grid');
@@ -1766,12 +1830,23 @@ window.api.onJournalEvents(async (newEvs) => {
     liveThrottleTimer = setTimeout(async () => {
         const batch = pendingLiveEvs.splice(0);
         liveThrottleTimer = null;
-        gJEvents.push(...batch);
+
+        // batch is small (just newly-appended journal lines) and chronological
+        // ascending; gJEvents is newest-first, so prepend the interesting ones
+        // in reverse order rather than re-filtering the whole feed.
+        gEventCount += batch.length;
+        const interesting = batch.filter(e => JFEED_INTERESTING.has(e.event));
+        if (interesting.length) gJEvents = interesting.slice().reverse().concat(gJEvents);
+        const newLoadout = [...batch].reverse().find(e => e.event === 'Loadout' && e.MaxJumpRange);
+        if (newLoadout) gLatestLoadout = newLoadout;
+        const newFSD = [...batch].reverse().find(e => e.event === 'FSDJump' && e.JumpDist);
+        if (newFSD) gLatestFSDJump = newFSD;
+
         gVisited = await window.api.getVisited();
         buildJFeedFiltered();
         renderJFeedVirtual();
         updateDash();
-        document.getElementById('sb-ev').textContent = gJEvents.length;
+        document.getElementById('sb-ev').textContent = gEventCount;
 
         const lastJump = [...batch].reverse().find(e=>['FSDJump','CarrierJump','Location'].includes(e.event));
         if (lastJump?.StarSystem) {
@@ -1813,11 +1888,18 @@ let   jFeedFiltered  = [];
 let   jFeedScroller  = null;
 let   jFeedAF        = null;
 
+// Same set journalWorker.js / main.js use to decide what counts as
+// "interesting" — gJEvents is already filtered+ordered to this by the
+// backend, so this is only needed here for folding in small live batches.
+const JFEED_INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
+    'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
+    'Resurrection','SupercruiseExit','LoadGame']);
+
+// gJEvents already arrives from the backend pre-filtered and newest-first
+// (see journal:getEvents), so this is just a passthrough — kept as a named
+// step in case future filtering (e.g. a feed search box) gets added here.
 function buildJFeedFiltered() {
-    const INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
-        'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
-        'Resurrection','SupercruiseExit','LoadGame']);
-    jFeedFiltered = gJEvents.filter(e => INTERESTING.has(e.event)).reverse();
+    jFeedFiltered = gJEvents;
 }
 
 function renderJFeedVirtual() {
@@ -1893,7 +1975,7 @@ async function loadSettings() {
     document.getElementById('db-logs').textContent = gLogs.length;
     document.getElementById('db-bm').textContent   = gBm.length;
     document.getElementById('db-vis').textContent  = gVisited.length;
-    document.getElementById('db-jev').textContent  = gJEvents.length;
+    document.getElementById('db-jev').textContent  = gEventCount;
     // Populate sync info
     loadSyncInfo();
 }
@@ -2191,6 +2273,7 @@ function filterLogsByTag(tag) {
 }
 
 function filterBmsByTag(tag) {
+    populateBmTagOptions();
     const tf = document.getElementById('bm-tag-filter');
     tf.value = tag;
     renderBookmarks();
@@ -2462,15 +2545,41 @@ const BN_TYPE_ICONS = {
     'Metal Rich':'⚙','High Metal Content':'⚙','Star':'⭐','Neutron':'💫','BlackHole':'⚫','Other':'◈'
 };
 
+// Rebuilds the "FILTER BY TAG" dropdown from whatever tags are actually
+// assigned to body notes right now. Preserves the current selection if
+// it's still a valid tag.
+function populateBnTagOptions() {
+    const sel = document.getElementById('bn-tag-filter');
+    if (!sel) return;
+    const current = sel.value;
+    const tags = new Set();
+    gBn.forEach(n => (n.tags||[]).forEach(t => t && tags.add(t)));
+    const sorted = [...tags].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML = '<option value="">ALL TAGS</option>' +
+        sorted.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+    if (sorted.includes(current)) sel.value = current;
+}
+
+function filterBnByTag(tag) {
+    populateBnTagOptions();
+    const tf = document.getElementById('bn-tag-filter');
+    tf.value = tag;
+    renderBn();
+    tf.focus();
+}
+
 function renderBn() {
+    populateBnTagOptions();
     const q    = (document.getElementById('bn-search')?.value||'').toLowerCase();
     const btyp = document.getElementById('bn-filter-type')?.value||'';
     const land = document.getElementById('bn-filter-land')?.value;
+    const tag  = document.getElementById('bn-tag-filter')?.value||'';
     const fl   = gBn.filter(n => {
         const tm = !q || (n.body_name.toLowerCase().includes(q) || (n.system||'').toLowerCase().includes(q) || (n.notes||'').toLowerCase().includes(q));
         const bm = !btyp || (n.body_type||'').includes(btyp);
         const lm = land === '' || land === undefined ? true : (land==='1' ? !!n.landable : !n.landable);
-        return tm && bm && lm;
+        const tgm = !tag || (n.tags||[]).includes(tag);
+        return tm && bm && lm && tgm;
     });
     const c = document.getElementById('bn-grid');
     if (fl.length === 0) {
@@ -2504,7 +2613,7 @@ function renderBn() {
             (badges.length ? `<div class="bn-badges">${badges.join('')}</div>` : '') +
             (stats.length  ? `<div class="bn-stat-row">${stats.map(s=>`<div class="bn-stat">${s}</div>`).join('')}</div>` : '') +
             (n.notes ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;line-height:1.5">${n.notes}</div>` : '') +
-            (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>` : '') +
+            (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBnByTag('${t.replace(/'/g,"\\'")}')" title="Filter by tag">${t}</span>`).join('')}</div>` : '') +
             ((n.coords||[]).length ? `<div class="bn-coord-list">${
                 n.coords.map((c, ci) => {
                     const latF = Number(c.lat).toFixed(4);
@@ -2533,19 +2642,20 @@ function renderBn() {
 
 // ── Shared: read jump range from journal ──────────────────────────
 function rpReadJumpRange() {
-    const loadout = [...gJEvents].reverse().find(e => e.event === 'Loadout' && e.MaxJumpRange);
-    if (loadout) {
-        const r = parseFloat(loadout.MaxJumpRange.toFixed(2));
+    // Loadout events aren't part of the feed (see JFEED_INTERESTING), so
+    // these come from the dedicated latest-event lookups the backend
+    // tracks, rather than scanning gJEvents.
+    if (gLatestLoadout) {
+        const r = parseFloat(gLatestLoadout.MaxJumpRange.toFixed(2));
         document.getElementById('rp-range').value = r;
-        const ship = loadout.Ship_Localised || loadout.Ship || 'unknown ship';
+        const ship = gLatestLoadout.Ship_Localised || gLatestLoadout.Ship || 'unknown ship';
         document.getElementById('rp-range-src').textContent = `${r} LY · ${ship}`;
         toast(`↺ Jump range: ${r} LY (${ship})`);
         return r;
     }
     // Fallback: last FSD jump distance
-    const jump = [...gJEvents].reverse().find(e => e.event === 'FSDJump' && e.JumpDist);
-    if (jump) {
-        const r = parseFloat(jump.JumpDist.toFixed(2));
+    if (gLatestFSDJump) {
+        const r = parseFloat(gLatestFSDJump.JumpDist.toFixed(2));
         document.getElementById('rp-range').value = r;
         document.getElementById('rp-range-src').textContent = `${r} LY · last jump dist`;
         toast(`↺ Using last jump distance: ${r} LY`);
