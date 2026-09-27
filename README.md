@@ -1,7 +1,7 @@
 <div align="center">
 
 <img src="https://img.shields.io/badge/Elite%20Dangerous-F4A800?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTEyIDJMMyAyMGgxOEwxMiAyeiIvPjwvc3ZnPg==&logoColor=black" alt="Elite Dangerous"/>
-<img src="https://img.shields.io/badge/version-2.2.0-00D4FF?style=for-the-badge" alt="Version"/>
+<img src="https://img.shields.io/badge/version-2.3.1-00D4FF?style=for-the-badge" alt="Version"/>
 <img src="https://img.shields.io/badge/platform-Electron%20%7C%20Android-4A90D9?style=for-the-badge" alt="Platform"/>
 
 ```
