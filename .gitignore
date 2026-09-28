@@ -62,3 +62,8 @@ Android/.vite/
 *.zip
 *.rar
 CMDRSYS_Feature_Roadmap.docx
+
+# ── Signing (never commit these) ──────────────────────────────────
+Android/android/keystore.properties
+Android/android/*.keystore
+Android/android/*.jks

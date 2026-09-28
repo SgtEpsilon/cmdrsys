@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://spansh.co.uk;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://spansh.co.uk;">
     <title>CMDRSYS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="vendor/three.min.js"></script>
     <style>
         :root {
             --bg-void:  #020609;
@@ -569,7 +569,9 @@
         </div>
         <div class="search-row">
             <input type="text" class="search-in" id="bm-search" placeholder="SEARCH SYSTEMS..." oninput="debouncedRenderBookmarks()">
-            <input type="text" class="search-in" id="bm-tag-filter" placeholder="FILTER BY TAG..." style="max-width:220px" oninput="debouncedRenderBookmarks()">
+            <select class="search-in form-sel" id="bm-tag-filter" style="max-width:220px" onchange="renderBookmarks()">
+                <option value="">ALL TAGS</option>
+            </select>
         </div>
         <div id="bm-grid" class="bm-grid"></div>
     </div>
@@ -645,6 +647,9 @@
                 <option value="">ALL</option>
                 <option value="1">LANDABLE ONLY</option>
                 <option value="0">NON-LANDABLE</option>
+            </select>
+            <select class="search-in form-sel" id="bn-tag-filter" style="max-width:220px" onchange="renderBn()">
+                <option value="">ALL TAGS</option>
             </select>
         </div>
         <div id="bn-grid" class="bn-grid"></div>
@@ -859,6 +864,87 @@
             </div>
         </div>
 
+        <!-- KEYBINDS PANEL -->
+        <div class="panel">
+            <div class="panel-title">Keybinds</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                These are global hotkeys — they work while Elite is in front. Click <span style="color:var(--ed-cyan)">REBIND</span>, then press the new combination
+                (<span style="color:var(--ed-cyan)">Esc</span> cancels). Avoid combinations Elite itself uses.
+            </div>
+            <div id="kb-list"></div>
+        </div>
+
+        <!-- IN-GAME OVERLAY PANEL -->
+        <div class="panel">
+            <div class="panel-title">In-Game Overlay — Surface Markers</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                When you approach a body that has Surface Coordinates saved on its Body Note, this shows the direction and distance to every one of them.
+                Elite must be set to <span style="color:var(--ed-cyan)">Borderless</span> or <span style="color:var(--ed-cyan)">Windowed</span> (overlays can't draw over exclusive fullscreen).
+                Toggle in-game with <span style="color:var(--ed-cyan)" data-kb="overlay_toggle">Ctrl+Alt+O</span>.
+            </div>
+            <div class="form-group">
+                <label class="form-lbl">Overlay</label>
+                <div class="toggle-row" style="margin-bottom:0">
+                    <button type="button" class="toggle-btn" id="ov-off" onclick="setOverlayEnabled(false)">OFF</button>
+                    <button type="button" class="toggle-btn" id="ov-on"  onclick="setOverlayEnabled(true)">ON</button>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Position</label>
+                    <select class="form-sel" id="ov-pos" onchange="saveOverlaySetting('overlay_pos', this.value)">
+                        <option value="top-right">Top right</option>
+                        <option value="top-left">Top left</option>
+                        <option value="middle-right">Middle right</option>
+                        <option value="middle-left">Middle left</option>
+                        <option value="bottom-right">Bottom right</option>
+                        <option value="bottom-left">Bottom left</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Size</label>
+                    <select class="form-sel" id="ov-scale" onchange="saveOverlaySetting('overlay_scale', this.value)">
+                        <option value="0.75">Small</option>
+                        <option value="1">Normal</option>
+                        <option value="1.25">Large</option>
+                        <option value="1.5">Extra large</option>
+                    </select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Opacity</label>
+                    <select class="form-sel" id="ov-opacity" onchange="saveOverlaySetting('overlay_opacity', this.value)">
+                        <option value="0.6">60%</option>
+                        <option value="0.75">75%</option>
+                        <option value="0.9">90%</option>
+                        <option value="1">100%</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Max markers shown</label>
+                    <select class="form-sel" id="ov-max" onchange="saveOverlaySetting('overlay_max', this.value)">
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="6">6</option>
+                        <option value="8">8</option>
+                        <option value="12">12</option>
+                    </select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Glide guidance (target pitch)</label>
+                    <select class="form-sel" id="ov-glide" onchange="saveOverlaySetting('overlay_glide', this.value)">
+                        <option value="1">On</option>
+                        <option value="0">Off</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Glide-end altitude</label>
+                    <select class="form-sel" id="ov-exit" onchange="saveOverlaySetting('overlay_exit_alt', this.value)">
+                        <option value="3000">3 km (game minimum)</option>
+                        <option value="5000">5 km</option>
+                        <option value="8000">8 km</option>
+                        <option value="10000">10 km</option>
+                    </select></div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                Glide guidance aims at the nearest marker. Press <span style="color:var(--ed-cyan)" data-kb="overlay_cycle">Ctrl+Alt+T</span> in-game to aim at the next one.
+                Set glide-end altitude to where your glides usually drop you out (about 5 km when targeting a settlement).
+            </div>
+            <button class="btn btn-c btn-sm" onclick="window.api.previewOverlay()">▶ Preview (10s)</button>
+        </div>
+
         <!-- SYNC SERVER PANEL -->
         <div class="panel">
             <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
@@ -920,7 +1006,7 @@
 
 <!-- ── STATUS BAR ──────────────────────────────────────────────────────────── -->
 <div id="statusbar">
-    <div class="sb-item">CMDRSYS <span>v1.0</span></div>
+    <div class="sb-item">CMDRSYS <span id="sb-version">v1.0</span></div>
     <div class="sb-item">|</div>
     <div class="sb-item">DB: <span class="ok">SQLITE</span></div>
     <div class="sb-item">|</div>
@@ -1232,6 +1318,20 @@
 
 <script>
 // ══════════════════════════════════════════════════════════════════
+// SAFETY NET — if anything throws before initApp() finishes wiring up
+// the UI, make sure the startup overlay still gets dismissed instead of
+// leaving the whole window looking permanently frozen/unclickable.
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('error', (e) => {
+    console.error('[uncaught]', e.message, e.error);
+    const el = document.getElementById('loading-overlay');
+    if (el && !el.classList.contains('hide')) {
+        el.classList.add('hide');
+        setTimeout(() => el.remove(), 500);
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════
 // ED DATE SYSTEM
 // ══════════════════════════════════════════════════════════════════
 const ED_OFFSET = 1286;
@@ -1271,7 +1371,17 @@ function toast(msg) {
 
 // ══════════════════════════════════════════════════════════════════
 // THREE.JS HOLOGRAPHIC PLANET
+// Purely decorative — if THREE failed to load (no bundled file, blocked
+// network, no WebGL support, etc.) this must NOT be allowed to throw and
+// kill the rest of this script block. Everything below this IIFE (initApp,
+// modal open/close, all the onclick handlers referenced from the HTML)
+// depends on the script finishing execution, so a single uncaught error
+// here used to leave the whole app inert: loading overlay stuck up top,
+// every button and text field unresponsive because their handlers were
+// never even defined.
 // ══════════════════════════════════════════════════════════════════
+try {
+if (typeof THREE === 'undefined') throw new Error('THREE is not loaded');
 (function() {
     const canvas   = document.getElementById('hologram-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
@@ -1321,6 +1431,9 @@ function toast(msg) {
         renderer.render(scene,camera);
     })();
 })();
+} catch (e) {
+    console.warn('[hologram] disabled — THREE.js unavailable or WebGL init failed:', e.message);
+}
 
 // ══════════════════════════════════════════════════════════════════
 // PERFORMANCE HELPERS
@@ -1354,16 +1467,18 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // INIT — load from SQLite via IPC
 // ══════════════════════════════════════════════════════════════════
 let gLogs=[], gBm=[], gVisited=[], gJEvents=[];
+// gJEvents holds only the capped, pre-filtered "interesting" journal feed
+// (newest-first) — never the full raw journal history, which for a long
+// career can be hundreds of thousands of events and is too expensive to
+// pass across IPC / re-render on every keystroke. Total count and the two
+// specific "latest event" lookups the Route Planner needs are tracked
+// separately since they don't require the raw history either.
+let gEventCount = 0, gLatestLoadout = null, gLatestFSDJump = null;
 
 // ══════════════════════════════════════════════════════════════════
 // LOADING OVERLAY
 // ══════════════════════════════════════════════════════════════════
 window.api.onJournalProgress(({ file, done, total }) => {
-    // The loading overlay (and ld-bar/ld-file/ld-count inside it) gets
-    // removed from the DOM by hideLoadingOverlay() shortly after startup —
-    // well before background journal loading finishes. Progress events keep
-    // arriving after that, so these elements may legitimately be gone by
-    // the time this fires; just no-op instead of throwing.
     const bar = document.getElementById('ld-bar');
     if (!bar) return;
     const pct = Math.round((done / total) * 100);
@@ -1386,20 +1501,17 @@ function hideLoadingOverlay() {
 // while journal data streams in and is filled in once ready.
 // ══════════════════════════════════════════════════════════════════
 async function initApp() {
-    // Version shown in the toolbar and System Status panel comes straight
-    // from package.json (via Electron's app.getVersion()) — never hardcode
-    // it here, or it'll drift the next time the version is bumped.
     try {
         if (!window.api || typeof window.api.getAppVersion !== 'function') {
-            throw new Error('window.api.getAppVersion is not available — preload.js may be out of date or not loaded');
+            throw new Error('window.api.getAppVersion is not available');
         }
         const version = await window.api.getAppVersion();
         document.getElementById('tb-version').textContent      = 'v' + version;
         document.getElementById('sysstat-version').textContent = 'v' + version;
+        document.getElementById('sb-version').textContent      = 'v' + version;
     } catch (e) {
         console.error('[version] failed to load app version:', e);
     }
-
     // Signal main process we're ready. Returns immediately — journal loading
     // (if any) continues in the background and reports back via
     // 'journal:progress' / 'journal:autoLoadComplete'.
@@ -1416,6 +1528,10 @@ async function initApp() {
     gBm      = await window.api.getBookmarks();
     gVisited = await window.api.getVisited();
     gJEvents = await window.api.getJournalEvents();
+    const meta0 = await window.api.getJournalMeta();
+    gEventCount    = meta0.eventCount;
+    gLatestLoadout = meta0.latestLoadout;
+    gLatestFSDJump = meta0.latestFSDJump;
 
     if (autoLoad && autoLoad.pending) {
         // Journals are loading in the background — reflect that in the UI
@@ -1456,6 +1572,10 @@ window.api.onJournalAutoLoadComplete(async (result) => {
 
     gJEvents = await window.api.getJournalEvents();
     gVisited = await window.api.getVisited();
+    const meta = await window.api.getJournalMeta();
+    gEventCount    = meta.eventCount;
+    gLatestLoadout = meta.latestLoadout;
+    gLatestFSDJump = meta.latestFSDJump;
 
     const settings = await window.api.getAllSettings();
     document.getElementById('inp-cmdr').value      = settings.cmdr   || 'UNKNOWN';
@@ -1501,7 +1621,7 @@ function updateDash() {
     document.getElementById('stat-logs').textContent = gLogs.length;
     document.getElementById('stat-bm').textContent   = gBm.length;
     document.getElementById('stat-vis').textContent  = gVisited.length;
-    document.getElementById('sb-ev').textContent     = gJEvents.length;
+    document.getElementById('sb-ev').textContent     = gEventCount;
 
     const rl = document.getElementById('dash-logs');
     const recent = [...gLogs].sort((a,b)=>b.ts-a.ts).slice(0,6);
@@ -1674,16 +1794,33 @@ async function deleteBm(id) {
     toast('Bookmark deleted');
 }
 
+// Rebuilds the "FILTER BY TAG" dropdown from whatever tags are actually
+// assigned to bookmarks right now, so it never drifts out of date as tags
+// get added/removed/edited. Preserves the current selection if it's still
+// a valid tag.
+function populateBmTagOptions() {
+    const sel = document.getElementById('bm-tag-filter');
+    if (!sel) return;
+    const current = sel.value;
+    const tags = new Set();
+    gBm.forEach(b => (b.tags||[]).forEach(t => t && tags.add(t)));
+    const sorted = [...tags].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML = '<option value="">ALL TAGS</option>' +
+        sorted.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+    if (sorted.includes(current)) sel.value = current;
+}
+
 function renderBookmarks() {
+    populateBmTagOptions();
     const q   = (document.getElementById('bm-search')?.value||'').toLowerCase();
-    const tag = (document.getElementById('bm-tag-filter')?.value||'').toLowerCase().trim();
+    const tag = document.getElementById('bm-tag-filter')?.value||'';
     const fl  = gBm.filter(b => {
         const textMatch = !q || (
             b.system.toLowerCase().includes(q) ||
             (b.notes||'').toLowerCase().includes(q) ||
             (b.tags||[]).some(t=>t.toLowerCase().includes(q))
         );
-        const tagMatch  = !tag || (b.tags||[]).some(t=>t.toLowerCase().includes(tag));
+        const tagMatch  = !tag || (b.tags||[]).includes(tag);
         return textMatch && tagMatch;
     });
     const c  = document.getElementById('bm-grid');
@@ -1774,12 +1911,23 @@ window.api.onJournalEvents(async (newEvs) => {
     liveThrottleTimer = setTimeout(async () => {
         const batch = pendingLiveEvs.splice(0);
         liveThrottleTimer = null;
-        gJEvents.push(...batch);
+
+        // batch is small (just newly-appended journal lines) and chronological
+        // ascending; gJEvents is newest-first, so prepend the interesting ones
+        // in reverse order rather than re-filtering the whole feed.
+        gEventCount += batch.length;
+        const interesting = batch.filter(e => JFEED_INTERESTING.has(e.event));
+        if (interesting.length) gJEvents = interesting.slice().reverse().concat(gJEvents);
+        const newLoadout = [...batch].reverse().find(e => e.event === 'Loadout' && e.MaxJumpRange);
+        if (newLoadout) gLatestLoadout = newLoadout;
+        const newFSD = [...batch].reverse().find(e => e.event === 'FSDJump' && e.JumpDist);
+        if (newFSD) gLatestFSDJump = newFSD;
+
         gVisited = await window.api.getVisited();
         buildJFeedFiltered();
         renderJFeedVirtual();
         updateDash();
-        document.getElementById('sb-ev').textContent = gJEvents.length;
+        document.getElementById('sb-ev').textContent = gEventCount;
 
         const lastJump = [...batch].reverse().find(e=>['FSDJump','CarrierJump','Location'].includes(e.event));
         if (lastJump?.StarSystem) {
@@ -1821,11 +1969,18 @@ let   jFeedFiltered  = [];
 let   jFeedScroller  = null;
 let   jFeedAF        = null;
 
+// Same set journalWorker.js / main.js use to decide what counts as
+// "interesting" — gJEvents is already filtered+ordered to this by the
+// backend, so this is only needed here for folding in small live batches.
+const JFEED_INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
+    'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
+    'Resurrection','SupercruiseExit','LoadGame']);
+
+// gJEvents already arrives from the backend pre-filtered and newest-first
+// (see journal:getEvents), so this is just a passthrough — kept as a named
+// step in case future filtering (e.g. a feed search box) gets added here.
 function buildJFeedFiltered() {
-    const INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
-        'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
-        'Resurrection','SupercruiseExit','LoadGame']);
-    jFeedFiltered = gJEvents.filter(e => INTERESTING.has(e.event)).reverse();
+    jFeedFiltered = gJEvents;
 }
 
 function renderJFeedVirtual() {
@@ -1901,10 +2056,117 @@ async function loadSettings() {
     document.getElementById('db-logs').textContent = gLogs.length;
     document.getElementById('db-bm').textContent   = gBm.length;
     document.getElementById('db-vis').textContent  = gVisited.length;
-    document.getElementById('db-jev').textContent  = gJEvents.length;
+    document.getElementById('db-jev').textContent  = gEventCount;
+    loadOverlaySettings(s);
+    loadKeybinds();
     // Populate sync info
     loadSyncInfo();
 }
+
+// ── Keybinds ──────────────────────────────────────────────────────────────────
+let kbCapturing = null;      // { id, onKey } while listening for a combo
+const kbPretty = a => String(a || '').replace(/CommandOrControl/g, 'Ctrl').replace(/Super/g, 'Win');
+
+function kbComboFromEvent(e) {
+    const c = e.code;
+    let key = null;
+    if (/^Key[A-Z]$/.test(c))         key = c.slice(3);
+    else if (/^Digit[0-9]$/.test(c))  key = c.slice(5);
+    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(c)) key = c;
+    else key = ({ ArrowUp:'Up', ArrowDown:'Down', ArrowLeft:'Left', ArrowRight:'Right', Space:'Space', Tab:'Tab',
+                  Enter:'Enter', Backspace:'Backspace', Delete:'Delete', Insert:'Insert', Home:'Home', End:'End',
+                  PageUp:'PageUp', PageDown:'PageDown', Minus:'-', Equal:'=', Comma:',', Period:'.', Slash:'/',
+                  Semicolon:';', Quote:"'", BracketLeft:'[', BracketRight:']', Backslash:'\\', Backquote:'`' })[c] || null;
+    if (!key) return null;                                   // a lone modifier or unsupported key
+    const mods = [];
+    if (e.ctrlKey)  mods.push('CommandOrControl');
+    if (e.altKey)   mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    if (e.metaKey)  mods.push('Super');
+    return [...mods, key].join('+');
+}
+
+function kbStopCapture() {
+    if (!kbCapturing) return;
+    document.removeEventListener('keydown', kbCapturing.onKey, true);
+    kbCapturing = null;
+    window.api.keybindCapture(false);
+}
+
+function kbStartCapture(id) {
+    kbStopCapture();
+    const status = document.getElementById('kb-msg-' + id);
+    const btn    = document.getElementById('kb-btn-' + id);
+    btn.textContent = 'PRESS KEYS…';
+    status.textContent = '';
+    const onKey = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (e.key === 'Escape') { kbStopCapture(); renderKeybinds(await window.api.getKeybinds()); return; }
+        const combo = kbComboFromEvent(e);
+        if (!combo) return;                                  // still holding just Ctrl/Alt/Shift
+        kbStopCapture();
+        const r = await window.api.setKeybind(id, combo);
+        renderKeybinds(r.list);
+        if (r.ok) toast('⌨ ' + kbPretty(combo) + ' bound');
+        else { const m = document.getElementById('kb-msg-' + id); if (m) m.textContent = '✖ ' + r.error; }
+    };
+    kbCapturing = { id, onKey };
+    window.api.keybindCapture(true).then(() => {
+        if (kbCapturing && kbCapturing.id === id) document.addEventListener('keydown', onKey, true);
+    });
+}
+
+async function kbReset(id) {
+    kbStopCapture();
+    const r = await window.api.resetKeybind(id);
+    renderKeybinds(r.list);
+    if (!r.ok) { const m = document.getElementById('kb-msg-' + id); if (m) m.textContent = '✖ ' + r.error; }
+}
+
+function renderKeybinds(list) {
+    const box = document.getElementById('kb-list');
+    if (!box) return;
+    box.innerHTML = '';
+    list.forEach(k => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-o)';
+        const isDef = k.accel.toLowerCase() === k.def.toLowerCase();
+        row.innerHTML =
+            `<div style="flex:1;min-width:0">
+                <div style="font-family:var(--font-hud);font-size:11px;letter-spacing:2px;color:var(--text)">${k.label.toUpperCase()}</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:1.6">${k.desc}</div>
+                <div id="kb-msg-${k.id}" style="font-family:var(--font-mono);font-size:9px;color:var(--ed-orange);min-height:12px">${k.ok ? '' : '✖ ' + (k.error || 'Could not register')}</div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:${k.ok ? 'var(--ed-cyan)' : 'var(--ed-orange)'};border:1px solid var(--border-o);padding:4px 10px;white-space:nowrap">${kbPretty(k.accel)}</div>
+            <button class="btn btn-c btn-sm" id="kb-btn-${k.id}" onclick="kbStartCapture('${k.id}')">REBIND</button>
+            <button class="btn btn-sm" ${isDef ? 'disabled style="opacity:.35"' : ''} onclick="kbReset('${k.id}')">RESET</button>`;
+        box.appendChild(row);
+        document.querySelectorAll(`[data-kb="${k.id}"]`).forEach(el => el.textContent = kbPretty(k.accel));
+    });
+}
+async function loadKeybinds() { renderKeybinds(await window.api.getKeybinds()); }
+
+// ── In-game overlay settings ──────────────────────────────────────────────────
+function paintOverlayToggle(on) {
+    document.getElementById('ov-on').classList.toggle('active', !!on);
+    document.getElementById('ov-off').classList.toggle('active', !on);
+}
+function loadOverlaySettings(s) {
+    paintOverlayToggle(s.overlay_enabled === '1');
+    document.getElementById('ov-pos').value     = s.overlay_pos     || 'top-right';
+    document.getElementById('ov-scale').value   = s.overlay_scale   || '1';
+    document.getElementById('ov-opacity').value = s.overlay_opacity || '0.9';
+    document.getElementById('ov-max').value     = s.overlay_max     || '6';
+    document.getElementById('ov-glide').value   = s.overlay_glide   || '1';
+    document.getElementById('ov-exit').value    = s.overlay_exit_alt || '5000';
+}
+async function saveOverlaySetting(key, val) { await window.api.setSetting(key, String(val)); }
+async function setOverlayEnabled(on) {
+    paintOverlayToggle(on);
+    await window.api.setSetting('overlay_enabled', on ? '1' : '0');
+    toast(on ? '◈ Overlay enabled' : '◈ Overlay disabled');
+}
+window.api.onOverlayEnabled(on => { paintOverlayToggle(on); toast(on ? '◈ Overlay enabled' : '◈ Overlay disabled'); });
 
 // ── Sync server UI ────────────────────────────────────────────────────────────
 
@@ -2199,6 +2461,7 @@ function filterLogsByTag(tag) {
 }
 
 function filterBmsByTag(tag) {
+    populateBmTagOptions();
     const tf = document.getElementById('bm-tag-filter');
     tf.value = tag;
     renderBookmarks();
@@ -2470,15 +2733,41 @@ const BN_TYPE_ICONS = {
     'Metal Rich':'⚙','High Metal Content':'⚙','Star':'⭐','Neutron':'💫','BlackHole':'⚫','Other':'◈'
 };
 
+// Rebuilds the "FILTER BY TAG" dropdown from whatever tags are actually
+// assigned to body notes right now. Preserves the current selection if
+// it's still a valid tag.
+function populateBnTagOptions() {
+    const sel = document.getElementById('bn-tag-filter');
+    if (!sel) return;
+    const current = sel.value;
+    const tags = new Set();
+    gBn.forEach(n => (n.tags||[]).forEach(t => t && tags.add(t)));
+    const sorted = [...tags].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML = '<option value="">ALL TAGS</option>' +
+        sorted.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+    if (sorted.includes(current)) sel.value = current;
+}
+
+function filterBnByTag(tag) {
+    populateBnTagOptions();
+    const tf = document.getElementById('bn-tag-filter');
+    tf.value = tag;
+    renderBn();
+    tf.focus();
+}
+
 function renderBn() {
+    populateBnTagOptions();
     const q    = (document.getElementById('bn-search')?.value||'').toLowerCase();
     const btyp = document.getElementById('bn-filter-type')?.value||'';
     const land = document.getElementById('bn-filter-land')?.value;
+    const tag  = document.getElementById('bn-tag-filter')?.value||'';
     const fl   = gBn.filter(n => {
         const tm = !q || (n.body_name.toLowerCase().includes(q) || (n.system||'').toLowerCase().includes(q) || (n.notes||'').toLowerCase().includes(q));
         const bm = !btyp || (n.body_type||'').includes(btyp);
         const lm = land === '' || land === undefined ? true : (land==='1' ? !!n.landable : !n.landable);
-        return tm && bm && lm;
+        const tgm = !tag || (n.tags||[]).includes(tag);
+        return tm && bm && lm && tgm;
     });
     const c = document.getElementById('bn-grid');
     if (fl.length === 0) {
@@ -2512,7 +2801,7 @@ function renderBn() {
             (badges.length ? `<div class="bn-badges">${badges.join('')}</div>` : '') +
             (stats.length  ? `<div class="bn-stat-row">${stats.map(s=>`<div class="bn-stat">${s}</div>`).join('')}</div>` : '') +
             (n.notes ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;line-height:1.5">${n.notes}</div>` : '') +
-            (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>` : '') +
+            (n.tags?.length ? `<div class="tag-row" style="margin-bottom:8px">${n.tags.map(t=>`<span class="tag tag-clickable" onclick="filterBnByTag('${t.replace(/'/g,"\\'")}')" title="Filter by tag">${t}</span>`).join('')}</div>` : '') +
             ((n.coords||[]).length ? `<div class="bn-coord-list">${
                 n.coords.map((c, ci) => {
                     const latF = Number(c.lat).toFixed(4);
@@ -2541,19 +2830,20 @@ function renderBn() {
 
 // ── Shared: read jump range from journal ──────────────────────────
 function rpReadJumpRange() {
-    const loadout = [...gJEvents].reverse().find(e => e.event === 'Loadout' && e.MaxJumpRange);
-    if (loadout) {
-        const r = parseFloat(loadout.MaxJumpRange.toFixed(2));
+    // Loadout events aren't part of the feed (see JFEED_INTERESTING), so
+    // these come from the dedicated latest-event lookups the backend
+    // tracks, rather than scanning gJEvents.
+    if (gLatestLoadout) {
+        const r = parseFloat(gLatestLoadout.MaxJumpRange.toFixed(2));
         document.getElementById('rp-range').value = r;
-        const ship = loadout.Ship_Localised || loadout.Ship || 'unknown ship';
+        const ship = gLatestLoadout.Ship_Localised || gLatestLoadout.Ship || 'unknown ship';
         document.getElementById('rp-range-src').textContent = `${r} LY · ${ship}`;
         toast(`↺ Jump range: ${r} LY (${ship})`);
         return r;
     }
     // Fallback: last FSD jump distance
-    const jump = [...gJEvents].reverse().find(e => e.event === 'FSDJump' && e.JumpDist);
-    if (jump) {
-        const r = parseFloat(jump.JumpDist.toFixed(2));
+    if (gLatestFSDJump) {
+        const r = parseFloat(gLatestFSDJump.JumpDist.toFixed(2));
         document.getElementById('rp-range').value = r;
         document.getElementById('rp-range-src').textContent = `${r} LY · last jump dist`;
         toast(`↺ Using last jump distance: ${r} LY`);

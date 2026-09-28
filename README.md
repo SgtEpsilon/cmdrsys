@@ -22,7 +22,7 @@
 
 ## 🚀 What is CMDR SYS?
 
-**CMDR SYS** is your personal mission log, intel tracker, and route planner — built for Elite Dangerous Commanders who need to keep track of the galaxy without tabbing out of the cockpit. The **Desktop app** (Electron) reads your Elite Dangerous journal files in real time and serves as the hub, while the **Android app** (React + Capacitor) stays in sync over WiFi so your data is always at your fingertips.
+**CMDR SYS** is your personal mission log, intel tracker, and route planner — built for Elite Dangerous Commanders who need to keep track of the galaxy without tabbing out of the cockpit. The **Desktop app** (Electron) reads your Elite Dangerous journal files in real time and serves as the hub, and can draw a **live in-game overlay** that points you at your saved surface coordinates, while the **Android app** (React + Capacitor) stays in sync over WiFi so your data is always at your fingertips.
 
 > *"In a galaxy of 400 billion star systems, you're going to need a notepad."*
 
@@ -37,13 +37,15 @@
 | 📋 **Commander's Log** | Write and tag mission notes, intel entries, and objectives — searchable and filterable by tag |
 | 🔖 **Bookmarks** | Save systems with type, coordinates (lat/lon/z), notes, and tags — displayed in a filterable grid |
 | 🌍 **Visited Systems** | Automatically tracked from your journal; searchable list of every system you've jumped to |
-| 🪐 **Body Notes** | Log planetary body data: type, star class, atmosphere, gravity, landability, bio/geo signals, terraform status, distance, estimated value, and personal notes |
-| 📡 **Live Journal Feed** | Watches your Elite Dangerous journal directory in real time, displaying events as they happen and auto-populating visited systems |
-| ⚡ **Neutron Plotter** | Integrated Spansh neutron route planner — enter source, destination, jump range and efficiency; displays full waypoint list with progress tracking |
+| 🪐 **Body Notes** | Log planetary body data: type, star class, atmosphere, gravity, landability, bio/geo signals, terraform status, distance, estimated value, and personal notes. Each note can hold any number of **Surface Coordinates** (lat/lon plus a label) that feed the in-game overlay |
+| 🎯 **In-Game Overlay** | A click-through, always-on-top HUD showing the bearing and distance to every saved surface coordinate on the body you're approaching, plus **glide guidance** (see below) |
+| ⌨️ **Rebindable Keybinds** | The overlay's global hotkeys can be viewed and reassigned from **Settings → Keybinds** |
+| 📡 **Live Journal Feed** | Watches your Elite Dangerous journal directory in real time, displaying events as they happen and auto-populating visited systems. Existing journals load on a background thread at startup, so the app is usable immediately even with years of history |
+| ⚡ **Neutron Plotter** | Integrated Spansh neutron route planner — enter source, destination, jump range and efficiency; displays full waypoint list with progress tracking. Jump range can be read straight from your journal |
 | ◎ **Tourist Planner** | Spansh tourist route planner — set a starting system, optional destination, and up to N waypoints (bookmarks or manual entry); displays a results table with jumps and distance per stop |
 | 🔄 **WiFi Sync Server** | Built-in HTTP sync server on your local network; the Android app pulls/pushes logs, bookmarks, and body notes over WiFi. Supports optional auth token and interface selection |
 | 💾 **Export / Import** | Full JSON export and import for backup or migration between machines |
-| 🛠️ **Settings** | Set Commander name, ship name/type; view database record counts; configure sync server IP, port, and token |
+| 🛠️ **Settings** | Set Commander name, ship name/type; view database record counts; configure the overlay, keybinds, and the sync server IP, port, and token |
 
 ### 📱 Android (React + Capacitor)
 
@@ -56,6 +58,27 @@
 | 📊 **Dashboard** | Overview of your key stats — log count, bookmarks, visited systems |
 | 🌐 **Sync Service** | Connects to the Desktop sync server over WiFi; pulls down all data and pushes local changes back |
 | 🎨 **Elite-themed UI** | Dark, immersive HUD-style interface with animated hologram planet, matching the Desktop app aesthetic |
+
+---
+
+## 🎯 In-Game Overlay
+
+When you approach a body whose Body Note has **Surface Coordinates** saved, CMDR SYS draws a small HUD over the game showing the direction and distance to each one. It reads Elite's `Status.json`, so no game modification is needed.
+
+- **Setup:** turn it on in **Settings → In-Game Overlay**. Elite must be set to **Borderless** or **Windowed**; overlays can't draw over exclusive fullscreen.
+- **Markers:** one row per saved coordinate on the current body, nearest first, each with an arrow relative to your heading, the bearing, and the distance. Rows turn orange when you're close and green when you're on site.
+- **Glide guidance:** aims at the nearest marker (or the one you cycle to) and shows the **target pitch** that glides you to the end altitude directly over it, your **current path** measured from recent positions, an on-path / too-steep / too-shallow verdict, where the glide would end (short or past), and an ETA. Set the **glide-end altitude** to where your glides usually drop you out (about 5 km for a settlement).
+- **Options:** position (six screen anchors), size, opacity, max markers shown, and a 10-second **Preview** so you can place it without flying anywhere.
+- **Hotkeys:**
+
+| Action | Default |
+|---|---|
+| Toggle overlay | `Ctrl+Alt+O` |
+| Cycle glide target | `Ctrl+Alt+T` |
+
+### ⌨️ Keybinds
+
+Open **Settings → Keybinds**, click **Rebind**, and press the new combination (`Esc` cancels). Hotkeys are global, so they work while Elite has focus. A combination needs at least one modifier (Ctrl / Alt / Shift) unless it is an F-key. CMDR SYS refuses combinations already used by another of its actions or held by another program, and **Reset** restores the default. Your choices are stored in the app database and re-applied on every launch.
 
 ---
 
@@ -85,11 +108,11 @@ npm run build:mac    # macOS (.dmg)
 npm run build:linux  # Linux (.AppImage)
 ```
 
-> 💡 On first launch, CMDR SYS will ask you to select your Elite Dangerous journal directory (usually `%USERPROFILE%\Saved Games\Frontier Developments\Elite Dangerous`).
+> 💡 On launch, CMDR SYS looks for your Elite Dangerous journal directory in the default location (usually `%USERPROFILE%\Saved Games\Frontier Developments\Elite Dangerous`). If yours lives elsewhere, pick it from the **Live Journal** view and it will be remembered.
 
 ### 📱 Android
 
-The prebuilt release APK is available in `android/app/release/cmdrsys-v2.2.0.apk`.
+Prebuilt APKs are published on the [Releases page](https://github.com/SgtEpsilon/cmdrsys/releases/latest).
 
 To build from source:
 
@@ -100,7 +123,9 @@ cd cmdrsys/Android
 # Build and run (see android build and run.txt for full instructions)
 ```
 
-> 💡 See [`android build and run.txt`](./android%20build%20and%20run.txt) in the root for full Android build instructions.
+For signing, versioning and publishing new builds of either app, follow [`HOW_TO_RELEASE.md`](./HOW_TO_RELEASE.md).
+
+> 💡 See [`android build and run.txt`](./Android/android%20build%20and%20run.txt) for full Android build instructions.
 
 ---
 
@@ -122,7 +147,8 @@ CMDR SYS uses a local HTTP server on the Desktop to keep both apps in sync over 
 
 | Version | Codename | Date |
 |---|---|---|
-| 🟢 **v2.0.1** *(Latest)* | Data Transfer Complete | March 2026 |
+| 🟢 **v2.4.0** *(Latest)* | In-game overlay, glide guidance & rebindable keybinds | — |
+| v2.0.1 | Data Transfer Complete | March 2026 |
 | v1.x | Earlier Versions | — |
 
 ➡️ [**Download the latest release →**](https://github.com/SgtEpsilon/cmdrsys/releases/latest)
@@ -150,10 +176,17 @@ CMDR SYS uses a local HTTP server on the Desktop to keep both apps in sync over 
 ```
 cmdrsys/
 ├── 📂 Electron/                    # Desktop app
-│   ├── main.js                     # Main process: DB, journal watcher, sync server
-│   ├── preload.js                  # IPC bridge
+│   ├── main.js                     # Main process: DB, journal watcher, sync server, overlay
+│   ├── preload.js                  # IPC bridge (main window)
+│   ├── journalWorker.js            # Background thread that parses journal files
+│   ├── overlayMath.js              # Bearing / distance / glide-slope maths
+│   ├── overlayPreload.js           # IPC bridge (overlay window)
+│   ├── keybinds.js                 # Rebindable global hotkeys
 │   ├── renderer/
-│   │   └── index.html              # Single-file renderer (UI, styles, all logic)
+│   │   ├── index.html              # Main UI (styles and app logic)
+│   │   ├── keybinds-ui.js          # Settings → Keybinds panel
+│   │   ├── overlay.html            # In-game overlay window
+│   │   └── vendor/                 # Bundled third-party scripts (three.js)
 │   └── package.json
 │
 ├── 📂 Android/                     # Android app (React + Capacitor)
@@ -178,11 +211,11 @@ cmdrsys/
 │   │       ├── storage.js          # Local persistence
 │   │       └── edDate.js           # Elite Dangerous date formatting
 │   ├── android/                    # Native Android project (Gradle)
-│   │   └── app/release/
-│   │       └── cmdrsys-v2.2.0.apk    # Release APK
+│   ├── android build and run.txt   # Android build guide
+│   ├── capacitor.config.ts
 │   └── vite.config.js
 │
-├── 📄 android build and run.txt    # Android build guide
+├── 📄 HOW_TO_RELEASE.md            # Step-by-step release guide (Android + PC)
 └── 📄 README.md
 ```
 

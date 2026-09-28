@@ -1,4 +1,6 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, globalShortcut } = require('electron');
+const overlayMath = require('./overlayMath');
+const keybinds    = require('./keybinds');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const fs   = require('fs');
@@ -239,9 +241,32 @@ let journalPath       = null;
 let lastFileSize      = 0;
 let journalLoadWorker = null;   // the in-flight background load, if any
 
-// In-memory journal events — NOT stored in SQLite (avoids huge DB writes)
-// We re-parse from files on each startup; only visited/meta is persisted.
-let memEvents = [];
+// In-memory journal feed state — NOT stored in SQLite (avoids huge DB
+// writes). We re-parse from files on each startup; only visited/meta is
+// persisted.
+//
+// We deliberately do NOT keep the full raw event history in memory here.
+// A long-running commander's journal can be hundreds of thousands of
+// events, and shipping that whole array across a worker postMessage and
+// then again across the journal:getEvents IPC call — both of which use
+// the structured clone algorithm and block whichever thread is doing the
+// (de)serializing — used to stall the app for a long time right after
+// startup, which looked like a hang. So journalWorker.js reduces the raw
+// history down to just what the UI actually needs, and that's all we
+// hold onto: a capped, pre-filtered feed, a total count, and the two
+// specific "latest event of this type" lookups the Route Planner needs.
+let memFeedEvents    = [];   // interesting events only, newest-first, capped
+let memEventCount    = 0;    // true total across all journal files
+let memLatestLoadout = null; // most recent Loadout event with MaxJumpRange
+let memLatestFSDJump = null; // most recent FSDJump event with JumpDist
+
+// Same "interesting" set journalWorker.js uses, needed here too so live
+// journal-watcher chunks (which arrive raw, a few lines at a time) can be
+// folded into memFeedEvents the same way the bulk load's results are.
+const JFEED_INTERESTING = new Set(['FSDJump','CarrierJump','Scan','Docked','Undocked',
+    'Location','Screenshot','MissionAccepted','MissionCompleted','Died',
+    'Resurrection','SupercruiseExit','LoadGame']);
+const JFEED_CAP = 10000;
 
 // Starts a background load of every journal file in `journalDir`. Resolves
 // once parsing is done AND the resulting visited/settings rows have been
@@ -305,7 +330,10 @@ function startJournalLoad(journalDir) {
                 if (msg.system) setSetting('system', msg.system);
                 flushDB();
 
-                memEvents = msg.events;
+                memFeedEvents    = msg.feedEvents;
+                memEventCount    = msg.eventCount;
+                memLatestLoadout = msg.latestLoadout;
+                memLatestFSDJump = msg.latestFSDJump;
                 startWatcher(msg.latestFile);
 
                 journalLoadWorker = null;
@@ -314,7 +342,7 @@ function startJournalLoad(journalDir) {
                     ok:         true,
                     fileCount:  msg.fileCount,
                     latestFile: path.basename(msg.latestFile),
-                    count:      memEvents.length,
+                    count:      memEventCount,
                     cmdr:       msg.cmdr,
                     ship:       msg.ship,
                     system:     msg.system,
@@ -353,7 +381,21 @@ function processLiveChunk(text) {
     const events = text.split('\n').map(parseLine).filter(Boolean);
     if (!events.length) return;
 
-    memEvents.push(...events);
+    // Live chunks are always small (just the lines appended since the last
+    // watch tick), so unlike the bulk startup load there's no perf concern
+    // scanning them fully — fold them into the same capped feed state.
+    memEventCount += events.length;
+    const interesting = events.filter(ev => JFEED_INTERESTING.has(ev.event));
+    if (interesting.length) {
+        memFeedEvents = interesting.slice().reverse().concat(memFeedEvents);
+        if (memFeedEvents.length > JFEED_CAP) memFeedEvents.length = JFEED_CAP;
+    }
+    // Chunk is chronological ascending, so the LAST matching entry (if any)
+    // is the newest.
+    const newLoadout = [...events].reverse().find(ev => ev.event === 'Loadout' && ev.MaxJumpRange);
+    if (newLoadout) memLatestLoadout = newLoadout;
+    const newFSD = [...events].reverse().find(ev => ev.event === 'FSDJump' && ev.JumpDist);
+    if (newFSD) memLatestFSDJump = newFSD;
 
     const visitStmt = db.prepare('INSERT OR IGNORE INTO visited (name, ts) VALUES (?, ?)');
     let system = '';
@@ -681,6 +723,317 @@ function stopSyncServer() {
     }
 }
 
+// ─── In-game overlay: surface markers ────────────────────────────────────────
+// A second, transparent, click-through, always-on-top window that shows the
+// direction + distance to every surface coordinate saved on the Body Note of
+// the planet you're approaching. Data source is Elite's Status.json (rewritten
+// by the game several times a second), which carries BodyName, Latitude,
+// Longitude, Heading, Altitude and PlanetRadius whenever you're close enough
+// to a planet for surface navigation. Elite must run Borderless or Windowed —
+// overlays can't draw over exclusive fullscreen.
+//
+//  settings keys: overlay_enabled ('1'/'0'), overlay_pos, overlay_scale,
+//                 overlay_opacity, overlay_max
+const OVERLAY_W = 340, OVERLAY_H = 900, OVERLAY_MARGIN = 24;
+const OVERLAY_POLL_MS = 500;
+// Global hotkeys are declared in the KEYBINDS table (near the window code) and
+// are user-rebindable from Settings.
+let overlayWin = null;
+let overlayTimer = null;
+let overlayLastRaw = '';
+let overlayLastActive = false;
+let overlayPreviewTimer = null;
+let overlayPreviewUntil = 0;
+let overlayNotesCache = { ts: 0, notes: [] };
+let overlayLastPayload = null;   // re-sent once the overlay page finishes loading
+let overlaySamples = [];         // recent { t, alt, lat, lon } for measuring the flown path
+let overlayTargetKey = null;     // marker the glide guidance is aimed at (null = nearest)
+let overlayLastBody = '';
+let overlayOrder = [];           // marker keys nearest-first, from the last payload
+let overlayHideTimer = null;     // pending "hide the overlay" (see overlayRequestHide)
+let overlayStateActive = false;  // did the last *processed* Status.json produce a payload?
+let overlayGlideState = 'unknown';   // sticky glide state, so colours don't flap at the thresholds
+const OVERLAY_HIDE_GRACE_MS = 1500;
+
+function getOverlaySettings() {
+    return {
+        enabled: getSetting('overlay_enabled', '0') === '1',
+        pos:     getSetting('overlay_pos', 'top-right'),
+        scale:   parseFloat(getSetting('overlay_scale', '1'))    || 1,
+        opacity: parseFloat(getSetting('overlay_opacity', '0.9')) || 0.9,
+        max:     parseInt(getSetting('overlay_max', '6'), 10)     || 6,
+        glide:   getSetting('overlay_glide', '1') === '1',
+        exitAlt: parseFloat(getSetting('overlay_exit_alt', '5000')) || 5000,
+    };
+}
+
+function getJournalDirForStatus() {
+    const saved = getSetting('journal_dir', '');
+    return saved || getDefaultJournalDir();
+}
+
+// Body notes change rarely; re-read at most every 2s so notes edited (or
+// synced from the phone) while you're parked at a body still show up.
+function getOverlayNotes() {
+    const now = Date.now();
+    if (now - overlayNotesCache.ts > 2000) {
+        overlayNotesCache = {
+            ts: now,
+            notes: queryAll('SELECT id, system, body_name, coords FROM body_notes').map(r => {
+                let coords = [];
+                try { coords = JSON.parse(r.coords || '[]'); } catch {}
+                return { ...r, coords };
+            }),
+        };
+    }
+    return overlayNotesCache.notes;
+}
+
+function overlayPosition(pos, scale) {
+    const b = screen.getPrimaryDisplay().bounds;
+    const w = Math.round(OVERLAY_W * scale);
+    const h = Math.min(Math.round(OVERLAY_H * scale), b.height - 2 * OVERLAY_MARGIN);
+    const [v, hz] = pos.split('-');
+    const x = hz === 'left' ? b.x + OVERLAY_MARGIN : b.x + b.width - w - OVERLAY_MARGIN;
+    const y = v === 'top'    ? b.y + OVERLAY_MARGIN
+            : v === 'bottom' ? b.y + b.height - h - OVERLAY_MARGIN
+            :                  b.y + Math.round((b.height - h) / 2);
+    return { x, y, width: w, height: h };
+}
+
+function ensureOverlayWindow() {
+    if (overlayWin && !overlayWin.isDestroyed()) return overlayWin;
+    const s = getOverlaySettings();
+    overlayWin = new BrowserWindow({
+        ...overlayPosition(s.pos, s.scale),
+        transparent: true,
+        frame: false,
+        resizable: false,
+        movable: false,
+        focusable: false,        // never steal focus from the game
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        hasShadow: false,
+        show: false,
+        fullscreenable: false,
+        backgroundColor: '#00000000',
+        webPreferences: {
+            preload: path.join(__dirname, 'overlayPreload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
+    overlayWin.setIgnoreMouseEvents(true);          // click-through
+    overlayWin.setAlwaysOnTop(true, 'screen-saver');
+    try { overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
+    overlayWin.webContents.setZoomFactor(s.scale);
+    overlayWin.loadFile(path.join(__dirname, 'renderer', 'overlay.html'));
+    overlayWin.webContents.on('did-finish-load', () => {
+        if (overlayLastPayload && overlayWin && !overlayWin.isDestroyed())
+            overlayWin.webContents.send('overlay:update', overlayLastPayload);
+    });
+    overlayWin.on('closed', () => { overlayWin = null; });
+    return overlayWin;
+}
+
+// Elite rewrites Status.json constantly, and for a moment the file can read back
+// empty, half-written, or without lat/long. Hiding the window on every one of
+// those blips is what made the overlay flash. Instead a hide is only *requested*;
+// it happens after a short grace period unless a good reading arrives first.
+function overlayCancelHide() {
+    if (overlayHideTimer) { clearTimeout(overlayHideTimer); overlayHideTimer = null; }
+}
+function overlayRequestHide() {
+    if (overlayHideTimer || !overlayLastActive) return;
+    overlayHideTimer = setTimeout(() => { overlayHideTimer = null; overlayPush(null); }, OVERLAY_HIDE_GRACE_MS);
+}
+
+function overlayPush(payload) {
+    const s = getOverlaySettings();
+    const active = !!(payload && payload.active);
+    overlayCancelHide();
+    if (active) {
+        const w = ensureOverlayWindow();
+        payload.layout = { pos: s.pos, opacity: s.opacity };
+        overlayLastPayload = payload;
+        if (!w.isVisible()) w.showInactive();
+        w.webContents.send('overlay:update', payload);
+    } else if (overlayWin && !overlayWin.isDestroyed()) {
+        overlayLastPayload = null;
+        overlayWin.webContents.send('overlay:update', { active: false });
+        if (overlayWin.isVisible()) overlayWin.hide();
+    }
+    overlayLastActive = active;
+}
+
+function overlayTick() {
+    if (Date.now() < overlayPreviewUntil) return;      // preview owns the window
+    const dir = getJournalDirForStatus();
+    if (!dir) return;
+    const file = path.join(dir, 'Status.json');
+    fs.readFile(file, 'utf8', (err, raw) => {
+        // Missing / empty file: usually just caught mid-write. Keep what's on screen and
+        // let the grace timer hide it if the file really has gone (game closed).
+        if (err || !raw) { overlayRequestHide(); return; }
+        if (raw === overlayLastRaw) {                   // nothing changed since last tick
+            if (overlayStateActive) overlayCancelHide();    // file is back, and it's the same good state
+            return;
+        }
+        let st;
+        try { st = JSON.parse(raw); } catch { return; } // caught the game mid-write; keep current display
+        overlayLastRaw = raw;
+        // File mtime has millisecond precision (the in-file timestamp only has seconds),
+        // which matters for measuring speed between samples.
+        fs.stat(file, (e2, stt) => overlayProcess(st, e2 ? Date.now() : stt.mtimeMs));
+    });
+}
+
+function overlayProcess(st, sampleTime) {
+    let payload = null;
+    if (st.BodyName && typeof st.Latitude === 'number') {
+        const s = getOverlaySettings();
+
+        // Keep ~10 s of position/altitude samples so the glide guidance can measure
+        // the path actually being flown. Reset when the body changes or after a gap.
+        if (st.BodyName !== overlayLastBody) {
+            overlaySamples = []; overlayTargetKey = null; overlayLastBody = st.BodyName;
+        }
+        const last = overlaySamples[overlaySamples.length - 1];
+        if (last && sampleTime - last.t > 5000) overlaySamples = [];
+        if (!last || sampleTime > last.t) {
+            overlaySamples.push({ t: sampleTime, alt: Number(st.Altitude) || 0, lat: st.Latitude, lon: st.Longitude });
+            while (overlaySamples.length && sampleTime - overlaySamples[0].t > 10000) overlaySamples.shift();
+        }
+
+        const markers = overlayMath.collectMarkers(getOverlayNotes(), st.BodyName);
+        payload = overlayMath.buildPayload(st, markers, s.max, 100, {
+            enabled: s.glide, exitAlt: s.exitAlt, samples: overlaySamples, targetKey: overlayTargetKey,
+        });
+        overlayOrder = payload ? payload.order : [];
+
+        // Hysteresis on the glide verdict: it flips to steep/shallow at ±1.5° but only
+        // returns to "on path" inside ±1.0°, so a path sitting on the line doesn't flicker.
+        const g = payload && payload.glide;
+        if (g && g.delta !== null && g.delta !== undefined) {
+            const d = g.delta, prev = overlayGlideState;
+            g.state = d >  1.5 ? 'steep'
+                    : d < -1.5 ? 'shallow'
+                    : (prev === 'steep'   && d >  1.0) ? 'steep'
+                    : (prev === 'shallow' && d < -1.0) ? 'shallow'
+                    : 'ok';
+            overlayGlideState = g.state;
+        } else {
+            overlayGlideState = 'unknown';
+        }
+    } else {
+        overlaySamples = []; overlayLastBody = ''; overlayGlideState = 'unknown';
+    }
+    overlayStateActive = !!payload;
+    if (payload) overlayPush(payload);
+    else overlayRequestHide();
+}
+
+// Ctrl+Alt+T — aim the glide guidance at the next marker (nearest → farthest → nearest…)
+function cycleOverlayTarget() {
+    if (!overlayOrder.length) return;
+    const cur = overlayTargetKey && overlayOrder.includes(overlayTargetKey)
+        ? overlayOrder.indexOf(overlayTargetKey)
+        : (overlayLastPayload && overlayLastPayload.targetKey ? overlayOrder.indexOf(overlayLastPayload.targetKey) : -1);
+    overlayTargetKey = overlayOrder[(cur + 1) % overlayOrder.length];
+    overlayGlideState = 'unknown';
+    overlayLastRaw = '';        // force the next tick to re-evaluate with the new target
+    overlayTick();
+}
+
+// Demo data so placement/size/opacity can be checked without flying anywhere.
+function overlayPreview() {
+    const w = ensureOverlayWindow();
+    const t0 = Date.now();
+    overlayPreviewUntil = t0 + 10000;
+    clearInterval(overlayPreviewTimer);
+    const demo = [
+        { key: 'a', label: 'Guardian beacon',    bearing:  40, dist: 240000 },
+        { key: 'b', label: 'Biological cluster', bearing: 175, dist: 180000 },
+        { key: 'd', label: 'Abandoned camp',     bearing: 120, dist: 1850 },
+        { key: 'c', label: 'Crashed ship',       bearing: 290, dist: 64 },
+    ];
+    const tick = () => {
+        if (Date.now() >= overlayPreviewUntil) {
+            clearInterval(overlayPreviewTimer);
+            overlayPreviewUntil = 0;
+            overlayLastRaw = '';
+            overlayPush(null);
+            return;
+        }
+        const el  = (Date.now() - t0) / 1000;
+        const hdg = (el * 25) % 360;
+        const req = 12.4;
+        const actual = req + 7 * Math.sin(el * 0.9);          // wander either side of the ideal path
+        const delta  = actual - req;
+        overlayPush({
+            active: true, preview: true, body: 'HIP 36601 C 5 a',
+            heading: hdg, altitude: 42000, lat: 0, lon: 0, hidden: 0,
+            targetKey: 'b',
+            markers: demo.map(d => ({
+                key: d.key, label: d.label, dist: d.dist, bearing: d.bearing, target: d.key === 'b',
+                rel: overlayMath.wrap180(d.bearing - hdg), onSite: d.dist <= 100,
+            })),
+            glide: getOverlaySettings().glide ? {
+                label: 'Biological cluster', exitAlt: getOverlaySettings().exitAlt,
+                required: req, actual, delta, groundM: 180000,
+                state: delta > 1.5 ? 'steep' : delta < -1.5 ? 'shallow' : 'ok',
+                missM: delta * 4000, noReach: false, etaS: 38, speed: 2500, window: 'ok',
+            } : null,
+        });
+    };
+    tick();
+    overlayPreviewTimer = setInterval(tick, 100);
+}
+
+function applyOverlaySettings() {
+    const s = getOverlaySettings();
+    overlayLastRaw = '';
+    overlayNotesCache.ts = 0;
+
+    if (!s.enabled) {
+        clearInterval(overlayTimer); overlayTimer = null;
+        overlayCancelHide();
+        if (overlayWin && !overlayWin.isDestroyed() && !overlayPreviewUntil) {
+            overlayWin.destroy(); overlayWin = null;
+        }
+        overlayLastActive = false;
+        return;
+    }
+    if (overlayWin && !overlayWin.isDestroyed()) {
+        overlayWin.setBounds(overlayPosition(s.pos, s.scale));
+        overlayWin.webContents.setZoomFactor(s.scale);
+    }
+    if (!overlayTimer) overlayTimer = setInterval(overlayTick, OVERLAY_POLL_MS);
+    overlayTick();
+}
+
+function toggleOverlayHotkey() {
+    const now = getSetting('overlay_enabled', '0') === '1';
+    setSetting('overlay_enabled', now ? '0' : '1');
+    saveDB();
+    applyOverlaySettings();
+    if (win && !win.isDestroyed()) win.webContents.send('overlay:enabledChanged', !now);
+}
+
+// ─── Keybinds ─────────────────────────────────────────────────────────────────
+// Add a row here and it shows up in Settings → Keybinds automatically.
+keybinds.init({
+    globalShortcut, ipcMain, getSetting, setSetting, saveDB: () => saveDB(),
+    binds: [
+        { id: 'overlay_toggle', label: 'Toggle overlay',     def: 'CommandOrControl+Alt+O',
+          desc: 'Show / hide the in-game surface-marker overlay',
+          run: () => toggleOverlayHotkey() },
+        { id: 'overlay_cycle',  label: 'Cycle glide target', def: 'CommandOrControl+Alt+T',
+          desc: 'Aim glide guidance at the next marker (nearest → farthest → nearest)',
+          run: () => cycleOverlayTarget() },
+    ],
+});
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 let win;
 function createWindow() {
@@ -698,6 +1051,13 @@ function createWindow() {
         },
     });
     win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    win.on('closed', () => {
+        clearInterval(overlayTimer); overlayTimer = null;
+        clearInterval(overlayPreviewTimer);
+        overlayCancelHide();
+        if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy();
+        overlayWin = null;
+    });
     // win.webContents.openDevTools();
 }
 
@@ -706,8 +1066,12 @@ app.whenReady().then(async () => {
     await initDB();
     createWindow();
     startSyncServer();   // ← start sync server alongside the app
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    applyOverlaySettings();
+    keybinds.registerAll();
+    app.on('activate', () => { if (!win || win.isDestroyed()) createWindow(); });
 });
+
+app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
 
 app.on('window-all-closed', () => {
     if (journalWatcher) journalWatcher.close();
@@ -757,7 +1121,12 @@ ipcMain.handle('renderer:ready', () => {
 
 // ─── Settings IPC ─────────────────────────────────────────────────────────────
 ipcMain.handle('settings:get',    (_, key, def) => getSetting(key, def));
-ipcMain.handle('settings:set',    (_, key, val) => { setSetting(key, val); saveDB(); return true; });
+ipcMain.handle('settings:set',    (_, key, val) => {
+    setSetting(key, val); saveDB();
+    if (String(key).startsWith('overlay_')) applyOverlaySettings();
+    return true;
+});
+ipcMain.handle('overlay:preview', () => { overlayPreview(); return true; });
 ipcMain.handle('settings:getAll', () => {
     const rows = queryAll('SELECT key, value FROM settings');
     const out  = {};
@@ -809,8 +1178,19 @@ ipcMain.handle('visited:clear', () => {
 });
 
 // ─── Journal Events IPC ───────────────────────────────────────────────────────
-ipcMain.handle('journal:getEvents', () => memEvents);
-ipcMain.handle('journal:clearEvents', () => { memEvents = []; return true; });
+// Returns the capped, pre-filtered feed (newest-first) — not the raw
+// journal history. See the memFeedEvents comment above for why.
+ipcMain.handle('journal:getEvents', () => memFeedEvents);
+ipcMain.handle('journal:getMeta', () => ({
+    eventCount:    memEventCount,
+    latestLoadout: memLatestLoadout,
+    latestFSDJump: memLatestFSDJump,
+}));
+ipcMain.handle('journal:clearEvents', () => {
+    memFeedEvents = []; memEventCount = 0;
+    memLatestLoadout = null; memLatestFSDJump = null;
+    return true;
+});
 
 // ─── journal:open — user manually picks a journal file/folder ─────────────────
 // Same background-loading approach as renderer:ready: return as soon as the

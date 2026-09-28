@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com;">
+<title>CMDRSYS Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Exo+2:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --orange: #FF6200;
+        --cyan:   #00D4FF;
+        --green:  #00FF88;
+        --dim:    #6F93B5;
+        --text:   #D8EEFF;
+        --hud:  'Orbitron', 'Segoe UI', sans-serif;
+        --label:'Exo 2', 'Segoe UI', sans-serif;
+        --mono: 'JetBrains Mono', Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: transparent; overflow: hidden; height: 100%; user-select: none; }
+    body { display: flex; padding: 0; font-family: var(--mono); color: var(--text); }
+    body.v-top    { align-items: flex-start; }
+    body.v-middle { align-items: center; }
+    body.v-bottom { align-items: flex-end; }
+    body.h-left   { justify-content: flex-start; }
+    body.h-right  { justify-content: flex-end; }
+
+    #panel {
+        width: 100%;
+        background: rgba(2, 8, 14, 0.80);
+        border: 1px solid rgba(255, 98, 0, 0.55);
+        padding: 10px 12px 8px;
+        clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+        box-shadow: 0 0 18px rgba(0, 212, 255, 0.12);
+        display: none;
+    }
+    #panel.show { display: block; }
+    .hdr { font-family: var(--label); font-size: 11px; letter-spacing: 3px; color: var(--orange);
+           text-transform: uppercase; }
+    .body-name { font-size: 12px; color: var(--cyan); margin: 3px 0 8px; letter-spacing: 1px;
+                 padding-bottom: 6px; border-bottom: 1px solid rgba(255, 98, 0, 0.35);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+    .row + .row { border-top: 1px solid rgba(0, 212, 255, 0.10); }
+    .arrow-wrap { width: 34px; height: 34px; flex-shrink: 0; position: relative; }
+    .arrow-wrap svg { width: 34px; height: 34px; transition: transform 0.35s linear; }
+    .ring { fill: none; stroke: rgba(0, 212, 255, 0.25); stroke-width: 1; }
+    .tip  { fill: var(--cyan); filter: drop-shadow(0 0 3px rgba(0, 212, 255, 0.8)); }
+    .row.near .tip { fill: var(--orange); filter: drop-shadow(0 0 3px rgba(255, 98, 0, 0.8)); }
+    .row.site .tip { fill: var(--green);  filter: drop-shadow(0 0 4px rgba(0, 255, 136, 0.9)); }
+    .info { flex: 1; min-width: 0; }
+    .lbl  { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub  { font-size: 11px; color: var(--dim); letter-spacing: 1px; margin-top: 1px; }
+    .dist { font-family: var(--hud); font-size: 14px; font-weight: 700; color: var(--cyan);
+            text-shadow: 0 0 8px rgba(0, 212, 255, 0.5); white-space: nowrap; text-align: right; }
+    .row.near .dist { color: var(--orange); text-shadow: 0 0 8px rgba(255, 98, 0, 0.5); }
+    .row.site .dist { color: var(--green);  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
+    .foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; padding-top: 6px;
+            border-top: 1px solid rgba(255, 98, 0, 0.35); font-size: 11px; color: var(--dim); letter-spacing: 1px; }
+    .foot b { color: var(--text); font-weight: 500; }
+    .more { font-size: 11px; color: var(--dim); text-align: center; padding-top: 4px; letter-spacing: 1px; }
+    .prev { color: var(--orange); }
+    .row.target .lbl::before { content: '◈ '; color: var(--orange); }
+
+    /* ── glide block ── */
+    .glide { display: none; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255, 98, 0, 0.35); }
+    .glide.show { display: block; }
+    .g-hdr { font-family: var(--label); font-size: 10px; letter-spacing: 3px; color: var(--orange); text-transform: uppercase; }
+    .g-to  { font-size: 11px; color: var(--dim); margin: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .g-main { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+    .g-k   { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+    .g-big { font-family: var(--hud); font-size: 24px; font-weight: 700; color: var(--cyan); line-height: 1.1;
+             text-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
+    .g-val { font-family: var(--hud); font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; text-align: right; }
+    .g-col.r { text-align: right; }
+    .g-bar { position: relative; height: 6px; margin: 9px 0 3px; background: rgba(0, 212, 255, 0.10);
+             border: 1px solid rgba(0, 212, 255, 0.25); }
+    .g-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--cyan); opacity: 0.7; }
+    .g-dot { position: absolute; top: -4px; width: 8px; height: 12px; margin-left: -4px; left: 50%;
+             background: var(--text); transition: left 0.3s linear, background 0.3s; display: none; }
+    .g-lbls { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+    .g-msg { margin-top: 7px; font-family: var(--label); font-size: 12px; letter-spacing: 1px; font-weight: 600; color: var(--dim); }
+    .g-sub { margin-top: 3px; font-size: 11px; color: var(--dim); letter-spacing: 0.5px; line-height: 1.5; }
+    .glide.ok    .g-msg { color: var(--green);  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5); }
+    .glide.ok    .g-dot { background: var(--green); }
+    .glide.steep .g-msg, .glide.shallow .g-msg { color: var(--orange); text-shadow: 0 0 8px rgba(255, 98, 0, 0.5); }
+    .glide.steep .g-dot, .glide.shallow .g-dot { background: var(--orange); }
+</style>
+</head>
+<body class="v-top h-right">
+<div id="panel">
+    <div class="hdr">◈ Surface Markers<span class="prev" id="prev"></span></div>
+    <div class="body-name" id="body"></div>
+    <div id="rows"></div>
+    <div class="more" id="more"></div>
+    <div class="glide" id="glide">
+        <div class="g-hdr">◈ Glide Path<span class="prev" id="g-end"></span></div>
+        <div class="g-to" id="g-to"></div>
+        <div class="g-main">
+            <div class="g-col"><div class="g-k">TARGET PITCH</div><div class="g-big" id="g-req">—</div></div>
+            <div class="g-col r"><div class="g-k">CURRENT PATH</div><div class="g-val" id="g-act">—</div></div>
+        </div>
+        <div class="g-bar"><div class="g-mid"></div><div class="g-dot" id="g-dot"></div></div>
+        <div class="g-lbls"><span>SHALLOW</span><span>STEEP</span></div>
+        <div class="g-msg" id="g-msg"></div>
+        <div class="g-sub" id="g-sub"></div>
+    </div>
+    <div class="foot"><span>HDG <b id="hdg">---</b></span><span>ALT <b id="alt">---</b></span></div>
+</div>
+
+<script>
+const panel = document.getElementById('panel');
+const rowsEl = document.getElementById('rows');
+const rowMap = new Map();      // key -> { el, arrow, lbl, sub, dist, angle }
+const NEAR_M = 2000;           // orange "getting close" threshold
+
+function fmtDist(m) {
+    if (m < 1000)      return Math.round(m) + ' m';
+    if (m < 100000)    return (m / 1000).toFixed(2) + ' km';
+    return Math.round(m / 1000).toLocaleString('en-GB') + ' km';
+}
+function fmtAlt(m) {
+    if (m < 10000) return Math.round(m) + ' m';
+    return (m / 1000).toFixed(1) + ' km';
+}
+const pad3 = n => String(Math.round(n) % 360).padStart(3, '0');
+
+// Keep the arrow's rotation continuous so it never spins the long way round
+// when the relative bearing wraps from +179 to -179.
+function shortestAngle(current, target) {
+    let d = ((target - current) % 360 + 540) % 360 - 180;
+    return current + d;
+}
+
+function makeRow(key) {
+    const el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML =
+        '<div class="arrow-wrap"><svg viewBox="-17 -17 34 34">' +
+        '<circle class="ring" r="15"/>' +
+        '<g class="rot"><path class="tip" d="M0,-13 L7,8 L0,4 L-7,8 Z"/></g>' +
+        '</svg></div>' +
+        '<div class="info"><div class="lbl"></div><div class="sub"></div></div>' +
+        '<div class="dist"></div>';
+    const r = { el, rot: el.querySelector('.rot'), lbl: el.querySelector('.lbl'),
+                sub: el.querySelector('.sub'), dist: el.querySelector('.dist'), angle: null };
+    // rotate the <g> via CSS transform so the transition applies
+    r.rot.style.transition = 'transform 0.35s linear';
+    r.rot.style.transformOrigin = '0 0';
+    r.rot.style.transformBox = 'view-box';
+    rowMap.set(key, r);
+    return r;
+}
+
+function applyLayout(p) {
+    const pos = p.layout && p.layout.pos || 'top-right';
+    const [v, h] = pos.split('-');
+    document.body.className = 'v-' + v + ' h-' + h;
+    panel.style.opacity = (p.layout && p.layout.opacity) || 0.9;
+}
+
+const fmtDeg  = d => d.toFixed(1) + '°';
+const fmtEta  = s => { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const fmtDelta = m => { const a = Math.abs(m); return a < 1000 ? Math.round(a) + ' m' : (a / 1000).toFixed(1) + ' km'; };
+
+function renderGlide(g) {
+    const el = document.getElementById('glide');
+    if (!g) { el.classList.remove('show'); return; }
+    el.classList.add('show');
+    el.classList.remove('ok', 'steep', 'shallow', 'unknown');
+    el.classList.add(g.state);
+
+    document.getElementById('g-to').textContent  = '→ ' + g.label;
+    document.getElementById('g-end').textContent = '  · END ' + (g.exitAlt / 1000).toFixed(g.exitAlt % 1000 ? 1 : 0) + ' KM';
+    // Shown as pitch below the horizon, matching the ship's attitude ladder
+    document.getElementById('g-req').textContent = '−' + fmtDeg(g.required);
+
+    const act = document.getElementById('g-act');
+    if (g.actual === null)      act.textContent = '···';
+    else if (g.actual >= 0)     act.textContent = '−' + fmtDeg(g.actual);
+    else                        act.textContent = '+' + fmtDeg(-g.actual) + ' ↑';
+
+    const dot = document.getElementById('g-dot');
+    if (g.delta === null) { dot.style.display = 'none'; }
+    else {
+        dot.style.display = 'block';
+        const c = Math.max(-10, Math.min(10, g.delta));
+        dot.style.left = (50 + c * 5) + '%';
+    }
+
+    const msg = document.getElementById('g-msg');
+    if      (g.state === 'ok')      msg.textContent = '✔ ON PATH';
+    else if (g.state === 'steep')   msg.textContent = '▲ TOO STEEP — RAISE NOSE ' + fmtDeg(Math.abs(g.delta));
+    else if (g.state === 'shallow') msg.textContent = '▼ TOO SHALLOW — LOWER NOSE ' + fmtDeg(Math.abs(g.delta));
+    else                            msg.textContent = 'FLY TOWARD TARGET TO READ PATH';
+
+    const bits = [];
+    if (g.noReach)                  bits.push('Path never reaches glide end — steepen');
+    else if (g.missM !== null) {
+        // Within ~5% of the range (min 3 km) is inside what the measured path can resolve
+        const tol = Math.max(3000, 0.05 * (g.groundM || 0));
+        bits.push(Math.abs(g.missM) < tol ? 'Glide ends on target'
+                : 'Glide ends ≈ ' + fmtDelta(g.missM) + (g.missM >= 0 ? ' short' : ' past'));
+    }
+    if (g.etaS !== null)            bits.push('ETA ' + fmtEta(g.etaS));
+    if (g.window === 'shallow')     bits.push('⚠ under 5° — glide may not engage');
+    if (g.window === 'steep')       bits.push('⚠ over 60° — too steep for glide');
+    document.getElementById('g-sub').textContent = bits.join(' · ');
+}
+
+window.overlayApi.onUpdate((p) => {
+    if (!p || !p.active) { panel.classList.remove('show'); renderGlide(null); return; }
+    applyLayout(p);
+    panel.classList.add('show');
+
+    document.getElementById('prev').textContent = p.preview ? '  · PREVIEW' : '';
+    document.getElementById('body').textContent = p.body;
+    document.getElementById('hdg').textContent  = pad3(p.heading) + '°';
+    document.getElementById('alt').textContent  = fmtAlt(p.altitude);
+    document.getElementById('more').textContent = p.hidden ? `+ ${p.hidden} more marker${p.hidden > 1 ? 's' : ''}` : '';
+    renderGlide(p.glide);
+
+    const seen = new Set();
+    let prev = null;
+    p.markers.forEach((m, idx) => {
+        seen.add(m.key);
+        const r = rowMap.get(m.key) || makeRow(m.key);
+
+        r.angle = r.angle === null ? m.rel : shortestAngle(r.angle, m.rel);
+        r.rot.style.transform = `rotate(${r.angle}deg)`;
+
+        r.lbl.textContent  = m.label;
+        r.sub.textContent  = m.onSite ? 'ON SITE' : 'BRG ' + pad3(m.bearing) + '°';
+        r.dist.textContent = m.onSite ? '◎' : fmtDist(m.dist);
+        r.el.classList.toggle('site', m.onSite);
+        r.el.classList.toggle('target', !!m.target);
+        r.el.classList.toggle('near', !m.onSite && m.dist < NEAR_M);
+
+        // keep DOM order == sorted order, only touching nodes that are out of place
+        const expected = prev ? prev.nextSibling : rowsEl.firstChild;
+        if (r.el !== expected) rowsEl.insertBefore(r.el, expected);
+        prev = r.el;
+    });
+
+    for (const [key, r] of rowMap) {
+        if (!seen.has(key)) { r.el.remove(); rowMap.delete(key); }
+    }
+});
+</script>
+</body>
+</html>

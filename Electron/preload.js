@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
     // Journal
     openJournal:    ()  => ipcRenderer.invoke('journal:open'),
     getJournalEvents: () => ipcRenderer.invoke('journal:getEvents'),
+    getJournalMeta:   () => ipcRenderer.invoke('journal:getMeta'),
     clearJournalEvents: () => ipcRenderer.invoke('journal:clearEvents'),
     stopJournalWatch:  () => ipcRenderer.invoke('journal:stopWatch'),
 
@@ -57,6 +58,14 @@ contextBridge.exposeInMainWorld('api', {
     getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
     saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
     deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    // Keybinds
+    getKeybinds:    ()        => ipcRenderer.invoke('keybinds:getAll'),
+    setKeybind:     (id, acc) => ipcRenderer.invoke('keybinds:set', id, acc),
+    resetKeybind:   (id)      => ipcRenderer.invoke('keybinds:reset', id),
+    keybindCapture: (on)      => ipcRenderer.invoke('keybinds:capture', !!on),
+    // In-game overlay
+    previewOverlay:       ()   => ipcRenderer.invoke('overlay:preview'),
+    onOverlayEnabled:     (cb) => ipcRenderer.on('overlay:enabledChanged', (_, on) => cb(on)),
     // Open URL in system browser
     openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 

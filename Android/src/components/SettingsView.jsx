@@ -197,6 +197,14 @@ export default function SettingsView({
           onChange={e => setSyncUrl(e.target.value)}
           placeholder="http://192.168.1.x:45678"
         />
+        {syncUrl && !/^https?:\/\//i.test(syncUrl) && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--ed-orange)',
+            marginTop: '-6px', marginBottom: '10px', letterSpacing: '0.5px',
+          }}>
+            ⚠ Missing http:// — will be added automatically as "http://{syncUrl}" on save
+          </div>
+        )}
 
         <FormInput
           label="Security Token (optional)"
