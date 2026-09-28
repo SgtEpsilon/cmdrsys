@@ -131,11 +131,17 @@ function flightPath(samples, R) {
     const dt = (b.t - a.t) / 1000;
     if (dt < 1.5) return null;
     const rAvg   = R + (a.alt + b.alt) / 2;
-    const ground = rAvg * centralAngle(a.lat, a.lon, b.lat, b.lon);
+    const arc    = centralAngle(a.lat, a.lon, b.lat, b.lon);   // radians of planet swept
+    const ground = rAvg * arc;
     const drop   = a.alt - b.alt;
     if (ground < 30 && Math.abs(drop) < 30) return null;   // basically stationary
+    // The chord slope is the depression angle at the MIDDLE of the window. The local
+    // horizon tilts away by `arc` over the window, so the depression at the newest
+    // sample (where the required pitch is computed) is half an arc smaller. Without
+    // this the reading is biased steep by up to ~0.8 deg on small worlds.
+    const chord = Math.atan2(drop, ground) / DEG;
     return {
-        gamma:  Math.atan2(drop, ground) / DEG,            // + descending, - climbing
+        gamma:  chord - (arc / 2) / DEG,                   // + descending, - climbing
         speed:  Math.sqrt(ground * ground + drop * drop) / dt,
         vs:     drop / dt,
     };

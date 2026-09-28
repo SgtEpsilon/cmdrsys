@@ -58,6 +58,11 @@ contextBridge.exposeInMainWorld('api', {
     getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
     saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
     deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    // Keybinds
+    getKeybinds:    ()        => ipcRenderer.invoke('keybinds:getAll'),
+    setKeybind:     (id, acc) => ipcRenderer.invoke('keybinds:set', id, acc),
+    resetKeybind:   (id)      => ipcRenderer.invoke('keybinds:reset', id),
+    keybindCapture: (on)      => ipcRenderer.invoke('keybinds:capture', !!on),
     // In-game overlay
     previewOverlay:       ()   => ipcRenderer.invoke('overlay:preview'),
     onOverlayEnabled:     (cb) => ipcRenderer.on('overlay:enabledChanged', (_, on) => cb(on)),

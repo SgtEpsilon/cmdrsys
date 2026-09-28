@@ -18,6 +18,7 @@
       "preload.js",
       "overlayPreload.js",
       "overlayMath.js",
+      "keybinds.js",
       "journalWorker.js",
       "renderer/**/*",
       "node_modules/**/*"

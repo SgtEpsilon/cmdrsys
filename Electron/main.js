@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, screen, globalShortcut } = require('electron');
 const overlayMath = require('./overlayMath');
+const keybinds    = require('./keybinds');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const fs   = require('fs');
@@ -735,8 +736,8 @@ function stopSyncServer() {
 //                 overlay_opacity, overlay_max
 const OVERLAY_W = 340, OVERLAY_H = 900, OVERLAY_MARGIN = 24;
 const OVERLAY_POLL_MS = 500;
-const OVERLAY_HOTKEY  = 'CommandOrControl+Alt+O';
-const OVERLAY_CYCLE_HOTKEY = 'CommandOrControl+Alt+T';   // cycle glide target
+// Global hotkeys are declared in the KEYBINDS table (near the window code) and
+// are user-rebindable from Settings.
 let overlayWin = null;
 let overlayTimer = null;
 let overlayLastRaw = '';
@@ -749,6 +750,10 @@ let overlaySamples = [];         // recent { t, alt, lat, lon } for measuring th
 let overlayTargetKey = null;     // marker the glide guidance is aimed at (null = nearest)
 let overlayLastBody = '';
 let overlayOrder = [];           // marker keys nearest-first, from the last payload
+let overlayHideTimer = null;     // pending "hide the overlay" (see overlayRequestHide)
+let overlayStateActive = false;  // did the last *processed* Status.json produce a payload?
+let overlayGlideState = 'unknown';   // sticky glide state, so colours don't flap at the thresholds
+const OVERLAY_HIDE_GRACE_MS = 1500;
 
 function getOverlaySettings() {
     return {
@@ -831,9 +836,22 @@ function ensureOverlayWindow() {
     return overlayWin;
 }
 
+// Elite rewrites Status.json constantly, and for a moment the file can read back
+// empty, half-written, or without lat/long. Hiding the window on every one of
+// those blips is what made the overlay flash. Instead a hide is only *requested*;
+// it happens after a short grace period unless a good reading arrives first.
+function overlayCancelHide() {
+    if (overlayHideTimer) { clearTimeout(overlayHideTimer); overlayHideTimer = null; }
+}
+function overlayRequestHide() {
+    if (overlayHideTimer || !overlayLastActive) return;
+    overlayHideTimer = setTimeout(() => { overlayHideTimer = null; overlayPush(null); }, OVERLAY_HIDE_GRACE_MS);
+}
+
 function overlayPush(payload) {
     const s = getOverlaySettings();
     const active = !!(payload && payload.active);
+    overlayCancelHide();
     if (active) {
         const w = ensureOverlayWindow();
         payload.layout = { pos: s.pos, opacity: s.opacity };
@@ -854,10 +872,15 @@ function overlayTick() {
     if (!dir) return;
     const file = path.join(dir, 'Status.json');
     fs.readFile(file, 'utf8', (err, raw) => {
-        if (err || !raw) { if (overlayLastActive) overlayPush(null); overlayLastRaw = ''; return; }
-        if (raw === overlayLastRaw) return;             // nothing changed since last tick
+        // Missing / empty file: usually just caught mid-write. Keep what's on screen and
+        // let the grace timer hide it if the file really has gone (game closed).
+        if (err || !raw) { overlayRequestHide(); return; }
+        if (raw === overlayLastRaw) {                   // nothing changed since last tick
+            if (overlayStateActive) overlayCancelHide();    // file is back, and it's the same good state
+            return;
+        }
         let st;
-        try { st = JSON.parse(raw); } catch { return; } // caught the game mid-write; next tick
+        try { st = JSON.parse(raw); } catch { return; } // caught the game mid-write; keep current display
         overlayLastRaw = raw;
         // File mtime has millisecond precision (the in-file timestamp only has seconds),
         // which matters for measuring speed between samples.
@@ -887,11 +910,27 @@ function overlayProcess(st, sampleTime) {
             enabled: s.glide, exitAlt: s.exitAlt, samples: overlaySamples, targetKey: overlayTargetKey,
         });
         overlayOrder = payload ? payload.order : [];
+
+        // Hysteresis on the glide verdict: it flips to steep/shallow at ±1.5° but only
+        // returns to "on path" inside ±1.0°, so a path sitting on the line doesn't flicker.
+        const g = payload && payload.glide;
+        if (g && g.delta !== null && g.delta !== undefined) {
+            const d = g.delta, prev = overlayGlideState;
+            g.state = d >  1.5 ? 'steep'
+                    : d < -1.5 ? 'shallow'
+                    : (prev === 'steep'   && d >  1.0) ? 'steep'
+                    : (prev === 'shallow' && d < -1.0) ? 'shallow'
+                    : 'ok';
+            overlayGlideState = g.state;
+        } else {
+            overlayGlideState = 'unknown';
+        }
     } else {
-        overlaySamples = []; overlayLastBody = '';
+        overlaySamples = []; overlayLastBody = ''; overlayGlideState = 'unknown';
     }
+    overlayStateActive = !!payload;
     if (payload) overlayPush(payload);
-    else if (overlayLastActive) overlayPush(null);
+    else overlayRequestHide();
 }
 
 // Ctrl+Alt+T — aim the glide guidance at the next marker (nearest → farthest → nearest…)
@@ -901,6 +940,7 @@ function cycleOverlayTarget() {
         ? overlayOrder.indexOf(overlayTargetKey)
         : (overlayLastPayload && overlayLastPayload.targetKey ? overlayOrder.indexOf(overlayLastPayload.targetKey) : -1);
     overlayTargetKey = overlayOrder[(cur + 1) % overlayOrder.length];
+    overlayGlideState = 'unknown';
     overlayLastRaw = '';        // force the next tick to re-evaluate with the new target
     overlayTick();
 }
@@ -957,6 +997,7 @@ function applyOverlaySettings() {
 
     if (!s.enabled) {
         clearInterval(overlayTimer); overlayTimer = null;
+        overlayCancelHide();
         if (overlayWin && !overlayWin.isDestroyed() && !overlayPreviewUntil) {
             overlayWin.destroy(); overlayWin = null;
         }
@@ -979,6 +1020,20 @@ function toggleOverlayHotkey() {
     if (win && !win.isDestroyed()) win.webContents.send('overlay:enabledChanged', !now);
 }
 
+// ─── Keybinds ─────────────────────────────────────────────────────────────────
+// Add a row here and it shows up in Settings → Keybinds automatically.
+keybinds.init({
+    globalShortcut, ipcMain, getSetting, setSetting, saveDB: () => saveDB(),
+    binds: [
+        { id: 'overlay_toggle', label: 'Toggle overlay',     def: 'CommandOrControl+Alt+O',
+          desc: 'Show / hide the in-game surface-marker overlay',
+          run: () => toggleOverlayHotkey() },
+        { id: 'overlay_cycle',  label: 'Cycle glide target', def: 'CommandOrControl+Alt+T',
+          desc: 'Aim glide guidance at the next marker (nearest → farthest → nearest)',
+          run: () => cycleOverlayTarget() },
+    ],
+});
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 let win;
 function createWindow() {
@@ -999,6 +1054,7 @@ function createWindow() {
     win.on('closed', () => {
         clearInterval(overlayTimer); overlayTimer = null;
         clearInterval(overlayPreviewTimer);
+        overlayCancelHide();
         if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy();
         overlayWin = null;
     });
@@ -1011,10 +1067,7 @@ app.whenReady().then(async () => {
     createWindow();
     startSyncServer();   // ← start sync server alongside the app
     applyOverlaySettings();
-    try { globalShortcut.register(OVERLAY_HOTKEY, toggleOverlayHotkey); }
-    catch (e) { console.warn('Overlay hotkey unavailable:', e.message); }
-    try { globalShortcut.register(OVERLAY_CYCLE_HOTKEY, cycleOverlayTarget); }
-    catch (e) { console.warn('Overlay target hotkey unavailable:', e.message); }
+    keybinds.registerAll();
     app.on('activate', () => { if (!win || win.isDestroyed()) createWindow(); });
 });
 

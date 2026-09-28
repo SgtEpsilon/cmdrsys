@@ -864,13 +864,16 @@
             </div>
         </div>
 
+        <!-- KEYBINDS (built by keybinds-ui.js) -->
+        <div id="keybinds-root"></div>
+
         <!-- IN-GAME OVERLAY PANEL -->
         <div class="panel">
             <div class="panel-title">In-Game Overlay — Surface Markers</div>
             <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
                 When you approach a body that has Surface Coordinates saved on its Body Note, this shows the direction and distance to every one of them.
                 Elite must be set to <span style="color:var(--ed-cyan)">Borderless</span> or <span style="color:var(--ed-cyan)">Windowed</span> (overlays can't draw over exclusive fullscreen).
-                Toggle in-game with <span style="color:var(--ed-cyan)">Ctrl+Alt+O</span>.
+                Toggle in-game with <span style="color:var(--ed-cyan)" data-kb="overlay_toggle">Ctrl+Alt+O</span>.
             </div>
             <div class="form-group">
                 <label class="form-lbl">Overlay</label>
@@ -929,7 +932,7 @@
                     </select></div>
             </div>
             <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
-                Glide guidance aims at the nearest marker. Press <span style="color:var(--ed-cyan)">Ctrl+Alt+T</span> in-game to aim at the next one.
+                Glide guidance aims at the nearest marker. Press <span style="color:var(--ed-cyan)" data-kb="overlay_cycle">Ctrl+Alt+T</span> in-game to aim at the next one.
                 Set glide-end altitude to where your glides usually drop you out (about 5 km when targeting a settlement).
             </div>
             <button class="btn btn-c btn-sm" onclick="window.api.previewOverlay()">▶ Preview (10s)</button>
@@ -3212,5 +3215,6 @@ document.querySelectorAll('.nav-item').forEach(el => {
 document.getElementById('bn-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeBnModal(); });
 
 </script>
+<script src="keybinds-ui.js"></script>
 </body>
 </html>
