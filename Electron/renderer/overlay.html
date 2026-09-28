@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com;">
 <title>CMDRSYS Overlay</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Exo+2:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
     :root {
         --orange: #FF6200;
@@ -13,6 +13,7 @@
         --dim:    #6F93B5;
         --text:   #D8EEFF;
         --hud:  'Orbitron', 'Segoe UI', sans-serif;
+        --label:'Exo 2', 'Segoe UI', sans-serif;
         --mono: 'JetBrains Mono', Consolas, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,7 +35,7 @@
         display: none;
     }
     #panel.show { display: block; }
-    .hdr { font-family: var(--hud); font-size: 10px; letter-spacing: 3px; color: var(--orange);
+    .hdr { font-family: var(--label); font-size: 11px; letter-spacing: 3px; color: var(--orange);
            text-transform: uppercase; }
     .body-name { font-size: 12px; color: var(--cyan); margin: 3px 0 8px; letter-spacing: 1px;
                  padding-bottom: 6px; border-bottom: 1px solid rgba(255, 98, 0, 0.35);
@@ -49,25 +50,25 @@
     .row.site .tip { fill: var(--green);  filter: drop-shadow(0 0 4px rgba(0, 255, 136, 0.9)); }
     .info { flex: 1; min-width: 0; }
     .lbl  { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sub  { font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-top: 1px; }
+    .sub  { font-size: 11px; color: var(--dim); letter-spacing: 1px; margin-top: 1px; }
     .dist { font-family: var(--hud); font-size: 14px; font-weight: 700; color: var(--cyan);
             text-shadow: 0 0 8px rgba(0, 212, 255, 0.5); white-space: nowrap; text-align: right; }
     .row.near .dist { color: var(--orange); text-shadow: 0 0 8px rgba(255, 98, 0, 0.5); }
     .row.site .dist { color: var(--green);  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
     .foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; padding-top: 6px;
-            border-top: 1px solid rgba(255, 98, 0, 0.35); font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+            border-top: 1px solid rgba(255, 98, 0, 0.35); font-size: 11px; color: var(--dim); letter-spacing: 1px; }
     .foot b { color: var(--text); font-weight: 500; }
-    .more { font-size: 10px; color: var(--dim); text-align: center; padding-top: 4px; letter-spacing: 1px; }
+    .more { font-size: 11px; color: var(--dim); text-align: center; padding-top: 4px; letter-spacing: 1px; }
     .prev { color: var(--orange); }
     .row.target .lbl::before { content: '◈ '; color: var(--orange); }
 
     /* ── glide block ── */
     .glide { display: none; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255, 98, 0, 0.35); }
     .glide.show { display: block; }
-    .g-hdr { font-family: var(--hud); font-size: 9px; letter-spacing: 3px; color: var(--orange); text-transform: uppercase; }
-    .g-to  { font-size: 10px; color: var(--dim); margin: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .g-hdr { font-family: var(--label); font-size: 10px; letter-spacing: 3px; color: var(--orange); text-transform: uppercase; }
+    .g-to  { font-size: 11px; color: var(--dim); margin: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .g-main { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
-    .g-k   { font-size: 9px; color: var(--dim); letter-spacing: 2px; }
+    .g-k   { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
     .g-big { font-family: var(--hud); font-size: 24px; font-weight: 700; color: var(--cyan); line-height: 1.1;
              text-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
     .g-val { font-family: var(--hud); font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; text-align: right; }
@@ -77,9 +78,9 @@
     .g-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--cyan); opacity: 0.7; }
     .g-dot { position: absolute; top: -4px; width: 8px; height: 12px; margin-left: -4px; left: 50%;
              background: var(--text); transition: left 0.3s linear, background 0.3s; display: none; }
-    .g-lbls { display: flex; justify-content: space-between; font-size: 8px; color: var(--dim); letter-spacing: 2px; }
-    .g-msg { margin-top: 7px; font-family: var(--hud); font-size: 11px; letter-spacing: 1px; font-weight: 600; color: var(--dim); }
-    .g-sub { margin-top: 3px; font-size: 10px; color: var(--dim); letter-spacing: 0.5px; line-height: 1.5; }
+    .g-lbls { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+    .g-msg { margin-top: 7px; font-family: var(--label); font-size: 12px; letter-spacing: 1px; font-weight: 600; color: var(--dim); }
+    .g-sub { margin-top: 3px; font-size: 11px; color: var(--dim); letter-spacing: 0.5px; line-height: 1.5; }
     .glide.ok    .g-msg { color: var(--green);  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5); }
     .glide.ok    .g-dot { background: var(--green); }
     .glide.steep .g-msg, .glide.shallow .g-msg { color: var(--orange); text-shadow: 0 0 8px rgba(255, 98, 0, 0.5); }
