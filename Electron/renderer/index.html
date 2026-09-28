@@ -864,6 +864,77 @@
             </div>
         </div>
 
+        <!-- IN-GAME OVERLAY PANEL -->
+        <div class="panel">
+            <div class="panel-title">In-Game Overlay — Surface Markers</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                When you approach a body that has Surface Coordinates saved on its Body Note, this shows the direction and distance to every one of them.
+                Elite must be set to <span style="color:var(--ed-cyan)">Borderless</span> or <span style="color:var(--ed-cyan)">Windowed</span> (overlays can't draw over exclusive fullscreen).
+                Toggle in-game with <span style="color:var(--ed-cyan)">Ctrl+Alt+O</span>.
+            </div>
+            <div class="form-group">
+                <label class="form-lbl">Overlay</label>
+                <div class="toggle-row" style="margin-bottom:0">
+                    <button type="button" class="toggle-btn" id="ov-off" onclick="setOverlayEnabled(false)">OFF</button>
+                    <button type="button" class="toggle-btn" id="ov-on"  onclick="setOverlayEnabled(true)">ON</button>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Position</label>
+                    <select class="form-sel" id="ov-pos" onchange="saveOverlaySetting('overlay_pos', this.value)">
+                        <option value="top-right">Top right</option>
+                        <option value="top-left">Top left</option>
+                        <option value="middle-right">Middle right</option>
+                        <option value="middle-left">Middle left</option>
+                        <option value="bottom-right">Bottom right</option>
+                        <option value="bottom-left">Bottom left</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Size</label>
+                    <select class="form-sel" id="ov-scale" onchange="saveOverlaySetting('overlay_scale', this.value)">
+                        <option value="0.75">Small</option>
+                        <option value="1">Normal</option>
+                        <option value="1.25">Large</option>
+                        <option value="1.5">Extra large</option>
+                    </select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Opacity</label>
+                    <select class="form-sel" id="ov-opacity" onchange="saveOverlaySetting('overlay_opacity', this.value)">
+                        <option value="0.6">60%</option>
+                        <option value="0.75">75%</option>
+                        <option value="0.9">90%</option>
+                        <option value="1">100%</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Max markers shown</label>
+                    <select class="form-sel" id="ov-max" onchange="saveOverlaySetting('overlay_max', this.value)">
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="6">6</option>
+                        <option value="8">8</option>
+                        <option value="12">12</option>
+                    </select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-lbl">Glide guidance (target pitch)</label>
+                    <select class="form-sel" id="ov-glide" onchange="saveOverlaySetting('overlay_glide', this.value)">
+                        <option value="1">On</option>
+                        <option value="0">Off</option>
+                    </select></div>
+                <div class="form-group"><label class="form-lbl">Glide-end altitude</label>
+                    <select class="form-sel" id="ov-exit" onchange="saveOverlaySetting('overlay_exit_alt', this.value)">
+                        <option value="3000">3 km (game minimum)</option>
+                        <option value="5000">5 km</option>
+                        <option value="8000">8 km</option>
+                        <option value="10000">10 km</option>
+                    </select></div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:2;margin-bottom:12px">
+                Glide guidance aims at the nearest marker. Press <span style="color:var(--ed-cyan)">Ctrl+Alt+T</span> in-game to aim at the next one.
+                Set glide-end altitude to where your glides usually drop you out (about 5 km when targeting a settlement).
+            </div>
+            <button class="btn btn-c btn-sm" onclick="window.api.previewOverlay()">▶ Preview (10s)</button>
+        </div>
+
         <!-- SYNC SERVER PANEL -->
         <div class="panel">
             <div class="panel-title">Mobile Sync — Android Auto-Sync</div>
@@ -1976,9 +2047,32 @@ async function loadSettings() {
     document.getElementById('db-bm').textContent   = gBm.length;
     document.getElementById('db-vis').textContent  = gVisited.length;
     document.getElementById('db-jev').textContent  = gEventCount;
+    loadOverlaySettings(s);
     // Populate sync info
     loadSyncInfo();
 }
+
+// ── In-game overlay settings ──────────────────────────────────────────────────
+function paintOverlayToggle(on) {
+    document.getElementById('ov-on').classList.toggle('active', !!on);
+    document.getElementById('ov-off').classList.toggle('active', !on);
+}
+function loadOverlaySettings(s) {
+    paintOverlayToggle(s.overlay_enabled === '1');
+    document.getElementById('ov-pos').value     = s.overlay_pos     || 'top-right';
+    document.getElementById('ov-scale').value   = s.overlay_scale   || '1';
+    document.getElementById('ov-opacity').value = s.overlay_opacity || '0.9';
+    document.getElementById('ov-max').value     = s.overlay_max     || '6';
+    document.getElementById('ov-glide').value   = s.overlay_glide   || '1';
+    document.getElementById('ov-exit').value    = s.overlay_exit_alt || '5000';
+}
+async function saveOverlaySetting(key, val) { await window.api.setSetting(key, String(val)); }
+async function setOverlayEnabled(on) {
+    paintOverlayToggle(on);
+    await window.api.setSetting('overlay_enabled', on ? '1' : '0');
+    toast(on ? '◈ Overlay enabled' : '◈ Overlay disabled');
+}
+window.api.onOverlayEnabled(on => { paintOverlayToggle(on); toast(on ? '◈ Overlay enabled' : '◈ Overlay disabled'); });
 
 // ── Sync server UI ────────────────────────────────────────────────────────────
 

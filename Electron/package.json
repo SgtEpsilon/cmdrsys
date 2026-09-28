@@ -16,6 +16,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "overlayPreload.js",
+      "overlayMath.js",
       "journalWorker.js",
       "renderer/**/*",
       "node_modules/**/*"

@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('api', {
     getBodyNotes:   ()    => ipcRenderer.invoke('bodynotes:getAll'),
     saveBodyNote:   (n)   => ipcRenderer.invoke('bodynotes:save', n),
     deleteBodyNote: (id)  => ipcRenderer.invoke('bodynotes:delete', id),
+    // In-game overlay
+    previewOverlay:       ()   => ipcRenderer.invoke('overlay:preview'),
+    onOverlayEnabled:     (cb) => ipcRenderer.on('overlay:enabledChanged', (_, on) => cb(on)),
     // Open URL in system browser
     openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 

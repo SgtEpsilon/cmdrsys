@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, globalShortcut } = require('electron');
+const overlayMath = require('./overlayMath');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const fs   = require('fs');
@@ -721,6 +722,263 @@ function stopSyncServer() {
     }
 }
 
+// ─── In-game overlay: surface markers ────────────────────────────────────────
+// A second, transparent, click-through, always-on-top window that shows the
+// direction + distance to every surface coordinate saved on the Body Note of
+// the planet you're approaching. Data source is Elite's Status.json (rewritten
+// by the game several times a second), which carries BodyName, Latitude,
+// Longitude, Heading, Altitude and PlanetRadius whenever you're close enough
+// to a planet for surface navigation. Elite must run Borderless or Windowed —
+// overlays can't draw over exclusive fullscreen.
+//
+//  settings keys: overlay_enabled ('1'/'0'), overlay_pos, overlay_scale,
+//                 overlay_opacity, overlay_max
+const OVERLAY_W = 340, OVERLAY_H = 900, OVERLAY_MARGIN = 24;
+const OVERLAY_POLL_MS = 500;
+const OVERLAY_HOTKEY  = 'CommandOrControl+Alt+O';
+const OVERLAY_CYCLE_HOTKEY = 'CommandOrControl+Alt+T';   // cycle glide target
+let overlayWin = null;
+let overlayTimer = null;
+let overlayLastRaw = '';
+let overlayLastActive = false;
+let overlayPreviewTimer = null;
+let overlayPreviewUntil = 0;
+let overlayNotesCache = { ts: 0, notes: [] };
+let overlayLastPayload = null;   // re-sent once the overlay page finishes loading
+let overlaySamples = [];         // recent { t, alt, lat, lon } for measuring the flown path
+let overlayTargetKey = null;     // marker the glide guidance is aimed at (null = nearest)
+let overlayLastBody = '';
+let overlayOrder = [];           // marker keys nearest-first, from the last payload
+
+function getOverlaySettings() {
+    return {
+        enabled: getSetting('overlay_enabled', '0') === '1',
+        pos:     getSetting('overlay_pos', 'top-right'),
+        scale:   parseFloat(getSetting('overlay_scale', '1'))    || 1,
+        opacity: parseFloat(getSetting('overlay_opacity', '0.9')) || 0.9,
+        max:     parseInt(getSetting('overlay_max', '6'), 10)     || 6,
+        glide:   getSetting('overlay_glide', '1') === '1',
+        exitAlt: parseFloat(getSetting('overlay_exit_alt', '5000')) || 5000,
+    };
+}
+
+function getJournalDirForStatus() {
+    const saved = getSetting('journal_dir', '');
+    return saved || getDefaultJournalDir();
+}
+
+// Body notes change rarely; re-read at most every 2s so notes edited (or
+// synced from the phone) while you're parked at a body still show up.
+function getOverlayNotes() {
+    const now = Date.now();
+    if (now - overlayNotesCache.ts > 2000) {
+        overlayNotesCache = {
+            ts: now,
+            notes: queryAll('SELECT id, system, body_name, coords FROM body_notes').map(r => {
+                let coords = [];
+                try { coords = JSON.parse(r.coords || '[]'); } catch {}
+                return { ...r, coords };
+            }),
+        };
+    }
+    return overlayNotesCache.notes;
+}
+
+function overlayPosition(pos, scale) {
+    const b = screen.getPrimaryDisplay().bounds;
+    const w = Math.round(OVERLAY_W * scale);
+    const h = Math.min(Math.round(OVERLAY_H * scale), b.height - 2 * OVERLAY_MARGIN);
+    const [v, hz] = pos.split('-');
+    const x = hz === 'left' ? b.x + OVERLAY_MARGIN : b.x + b.width - w - OVERLAY_MARGIN;
+    const y = v === 'top'    ? b.y + OVERLAY_MARGIN
+            : v === 'bottom' ? b.y + b.height - h - OVERLAY_MARGIN
+            :                  b.y + Math.round((b.height - h) / 2);
+    return { x, y, width: w, height: h };
+}
+
+function ensureOverlayWindow() {
+    if (overlayWin && !overlayWin.isDestroyed()) return overlayWin;
+    const s = getOverlaySettings();
+    overlayWin = new BrowserWindow({
+        ...overlayPosition(s.pos, s.scale),
+        transparent: true,
+        frame: false,
+        resizable: false,
+        movable: false,
+        focusable: false,        // never steal focus from the game
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        hasShadow: false,
+        show: false,
+        fullscreenable: false,
+        backgroundColor: '#00000000',
+        webPreferences: {
+            preload: path.join(__dirname, 'overlayPreload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
+    overlayWin.setIgnoreMouseEvents(true);          // click-through
+    overlayWin.setAlwaysOnTop(true, 'screen-saver');
+    try { overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
+    overlayWin.webContents.setZoomFactor(s.scale);
+    overlayWin.loadFile(path.join(__dirname, 'renderer', 'overlay.html'));
+    overlayWin.webContents.on('did-finish-load', () => {
+        if (overlayLastPayload && overlayWin && !overlayWin.isDestroyed())
+            overlayWin.webContents.send('overlay:update', overlayLastPayload);
+    });
+    overlayWin.on('closed', () => { overlayWin = null; });
+    return overlayWin;
+}
+
+function overlayPush(payload) {
+    const s = getOverlaySettings();
+    const active = !!(payload && payload.active);
+    if (active) {
+        const w = ensureOverlayWindow();
+        payload.layout = { pos: s.pos, opacity: s.opacity };
+        overlayLastPayload = payload;
+        if (!w.isVisible()) w.showInactive();
+        w.webContents.send('overlay:update', payload);
+    } else if (overlayWin && !overlayWin.isDestroyed()) {
+        overlayLastPayload = null;
+        overlayWin.webContents.send('overlay:update', { active: false });
+        if (overlayWin.isVisible()) overlayWin.hide();
+    }
+    overlayLastActive = active;
+}
+
+function overlayTick() {
+    if (Date.now() < overlayPreviewUntil) return;      // preview owns the window
+    const dir = getJournalDirForStatus();
+    if (!dir) return;
+    const file = path.join(dir, 'Status.json');
+    fs.readFile(file, 'utf8', (err, raw) => {
+        if (err || !raw) { if (overlayLastActive) overlayPush(null); overlayLastRaw = ''; return; }
+        if (raw === overlayLastRaw) return;             // nothing changed since last tick
+        let st;
+        try { st = JSON.parse(raw); } catch { return; } // caught the game mid-write; next tick
+        overlayLastRaw = raw;
+        // File mtime has millisecond precision (the in-file timestamp only has seconds),
+        // which matters for measuring speed between samples.
+        fs.stat(file, (e2, stt) => overlayProcess(st, e2 ? Date.now() : stt.mtimeMs));
+    });
+}
+
+function overlayProcess(st, sampleTime) {
+    let payload = null;
+    if (st.BodyName && typeof st.Latitude === 'number') {
+        const s = getOverlaySettings();
+
+        // Keep ~10 s of position/altitude samples so the glide guidance can measure
+        // the path actually being flown. Reset when the body changes or after a gap.
+        if (st.BodyName !== overlayLastBody) {
+            overlaySamples = []; overlayTargetKey = null; overlayLastBody = st.BodyName;
+        }
+        const last = overlaySamples[overlaySamples.length - 1];
+        if (last && sampleTime - last.t > 5000) overlaySamples = [];
+        if (!last || sampleTime > last.t) {
+            overlaySamples.push({ t: sampleTime, alt: Number(st.Altitude) || 0, lat: st.Latitude, lon: st.Longitude });
+            while (overlaySamples.length && sampleTime - overlaySamples[0].t > 10000) overlaySamples.shift();
+        }
+
+        const markers = overlayMath.collectMarkers(getOverlayNotes(), st.BodyName);
+        payload = overlayMath.buildPayload(st, markers, s.max, 100, {
+            enabled: s.glide, exitAlt: s.exitAlt, samples: overlaySamples, targetKey: overlayTargetKey,
+        });
+        overlayOrder = payload ? payload.order : [];
+    } else {
+        overlaySamples = []; overlayLastBody = '';
+    }
+    if (payload) overlayPush(payload);
+    else if (overlayLastActive) overlayPush(null);
+}
+
+// Ctrl+Alt+T — aim the glide guidance at the next marker (nearest → farthest → nearest…)
+function cycleOverlayTarget() {
+    if (!overlayOrder.length) return;
+    const cur = overlayTargetKey && overlayOrder.includes(overlayTargetKey)
+        ? overlayOrder.indexOf(overlayTargetKey)
+        : (overlayLastPayload && overlayLastPayload.targetKey ? overlayOrder.indexOf(overlayLastPayload.targetKey) : -1);
+    overlayTargetKey = overlayOrder[(cur + 1) % overlayOrder.length];
+    overlayLastRaw = '';        // force the next tick to re-evaluate with the new target
+    overlayTick();
+}
+
+// Demo data so placement/size/opacity can be checked without flying anywhere.
+function overlayPreview() {
+    const w = ensureOverlayWindow();
+    const t0 = Date.now();
+    overlayPreviewUntil = t0 + 10000;
+    clearInterval(overlayPreviewTimer);
+    const demo = [
+        { key: 'a', label: 'Guardian beacon',    bearing:  40, dist: 240000 },
+        { key: 'b', label: 'Biological cluster', bearing: 175, dist: 180000 },
+        { key: 'd', label: 'Abandoned camp',     bearing: 120, dist: 1850 },
+        { key: 'c', label: 'Crashed ship',       bearing: 290, dist: 64 },
+    ];
+    const tick = () => {
+        if (Date.now() >= overlayPreviewUntil) {
+            clearInterval(overlayPreviewTimer);
+            overlayPreviewUntil = 0;
+            overlayLastRaw = '';
+            overlayPush(null);
+            return;
+        }
+        const el  = (Date.now() - t0) / 1000;
+        const hdg = (el * 25) % 360;
+        const req = 12.4;
+        const actual = req + 7 * Math.sin(el * 0.9);          // wander either side of the ideal path
+        const delta  = actual - req;
+        overlayPush({
+            active: true, preview: true, body: 'HIP 36601 C 5 a',
+            heading: hdg, altitude: 42000, lat: 0, lon: 0, hidden: 0,
+            targetKey: 'b',
+            markers: demo.map(d => ({
+                key: d.key, label: d.label, dist: d.dist, bearing: d.bearing, target: d.key === 'b',
+                rel: overlayMath.wrap180(d.bearing - hdg), onSite: d.dist <= 100,
+            })),
+            glide: getOverlaySettings().glide ? {
+                label: 'Biological cluster', exitAlt: getOverlaySettings().exitAlt,
+                required: req, actual, delta, groundM: 180000,
+                state: delta > 1.5 ? 'steep' : delta < -1.5 ? 'shallow' : 'ok',
+                missM: delta * 4000, noReach: false, etaS: 38, speed: 2500, window: 'ok',
+            } : null,
+        });
+    };
+    tick();
+    overlayPreviewTimer = setInterval(tick, 100);
+}
+
+function applyOverlaySettings() {
+    const s = getOverlaySettings();
+    overlayLastRaw = '';
+    overlayNotesCache.ts = 0;
+
+    if (!s.enabled) {
+        clearInterval(overlayTimer); overlayTimer = null;
+        if (overlayWin && !overlayWin.isDestroyed() && !overlayPreviewUntil) {
+            overlayWin.destroy(); overlayWin = null;
+        }
+        overlayLastActive = false;
+        return;
+    }
+    if (overlayWin && !overlayWin.isDestroyed()) {
+        overlayWin.setBounds(overlayPosition(s.pos, s.scale));
+        overlayWin.webContents.setZoomFactor(s.scale);
+    }
+    if (!overlayTimer) overlayTimer = setInterval(overlayTick, OVERLAY_POLL_MS);
+    overlayTick();
+}
+
+function toggleOverlayHotkey() {
+    const now = getSetting('overlay_enabled', '0') === '1';
+    setSetting('overlay_enabled', now ? '0' : '1');
+    saveDB();
+    applyOverlaySettings();
+    if (win && !win.isDestroyed()) win.webContents.send('overlay:enabledChanged', !now);
+}
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 let win;
 function createWindow() {
@@ -738,6 +996,12 @@ function createWindow() {
         },
     });
     win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    win.on('closed', () => {
+        clearInterval(overlayTimer); overlayTimer = null;
+        clearInterval(overlayPreviewTimer);
+        if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy();
+        overlayWin = null;
+    });
     // win.webContents.openDevTools();
 }
 
@@ -746,8 +1010,15 @@ app.whenReady().then(async () => {
     await initDB();
     createWindow();
     startSyncServer();   // ← start sync server alongside the app
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    applyOverlaySettings();
+    try { globalShortcut.register(OVERLAY_HOTKEY, toggleOverlayHotkey); }
+    catch (e) { console.warn('Overlay hotkey unavailable:', e.message); }
+    try { globalShortcut.register(OVERLAY_CYCLE_HOTKEY, cycleOverlayTarget); }
+    catch (e) { console.warn('Overlay target hotkey unavailable:', e.message); }
+    app.on('activate', () => { if (!win || win.isDestroyed()) createWindow(); });
 });
+
+app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
 
 app.on('window-all-closed', () => {
     if (journalWatcher) journalWatcher.close();
@@ -797,7 +1068,12 @@ ipcMain.handle('renderer:ready', () => {
 
 // ─── Settings IPC ─────────────────────────────────────────────────────────────
 ipcMain.handle('settings:get',    (_, key, def) => getSetting(key, def));
-ipcMain.handle('settings:set',    (_, key, val) => { setSetting(key, val); saveDB(); return true; });
+ipcMain.handle('settings:set',    (_, key, val) => {
+    setSetting(key, val); saveDB();
+    if (String(key).startsWith('overlay_')) applyOverlaySettings();
+    return true;
+});
+ipcMain.handle('overlay:preview', () => { overlayPreview(); return true; });
 ipcMain.handle('settings:getAll', () => {
     const rows = queryAll('SELECT key, value FROM settings');
     const out  = {};
