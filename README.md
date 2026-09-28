@@ -1,7 +1,7 @@
 <div align="center">
 
 <img src="https://img.shields.io/badge/Elite%20Dangerous-F4A800?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTEyIDJMMyAyMGgxOEwxMiAyeiIvPjwvc3ZnPg==&logoColor=black" alt="Elite Dangerous"/>
-<img src="https://img.shields.io/badge/version-2.3.2-00D4FF?style=for-the-badge" alt="Version"/>
+<img src="https://img.shields.io/badge/version-2.4.0-00D4FF?style=for-the-badge" alt="Version"/>
 <img src="https://img.shields.io/badge/platform-Electron%20%7C%20Android-4A90D9?style=for-the-badge" alt="Platform"/>
 
 ```
@@ -147,7 +147,7 @@ CMDR SYS uses a local HTTP server on the Desktop to keep both apps in sync over 
 
 | Version | Codename | Date |
 |---|---|---|
-| 🟢 **v2.3.2** *(Latest)* | In-game overlay, glide guidance & rebindable keybinds | — |
+| 🟢 **v2.4.0** *(Latest)* | In-game overlay, glide guidance & rebindable keybinds | — |
 | v2.0.1 | Data Transfer Complete | March 2026 |
 | v1.x | Earlier Versions | — |
 
